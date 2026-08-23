@@ -1,0 +1,131 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from sklearn.metrics import precision_recall_curve
+
+plt.rcParams.update(
+    {
+        "font.family": "serif",
+        "font.size": 11,
+        "axes.labelsize": 12,
+        "axes.titlesize": 13,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "legend.fontsize": 10,
+        "figure.titlesize": 14,
+        "figure.dpi": 300,
+        "savefig.dpi": 300,
+        "savefig.bbox": "tight",
+    }
+)
+
+PALETTE = {
+    "SkipGNN Uniform": "#7293CB",
+    "AMS Uniform": "#2E5B88",
+    "SkipGNN Hard": "#E1974C",
+    "AMS Hard": "#AB4E19",
+}
+
+
+def _ensure_dir(path: Path) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def plot_uniform_vs_hard(df: pd.DataFrame, out_path: Path) -> None:
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    sns.barplot(data=df, x="dataset", y="auprc", hue="series", ax=ax, palette=PALETTE)
+    ax.set_ylim(0.5, 1.0)
+    ax.set_ylabel("AUPRC")
+    ax.set_xlabel("Dataset")
+    ax.legend(frameon=False)
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
+def plot_ablation_ladder(df: pd.DataFrame, out_path: Path) -> None:
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    sns.barplot(data=df, x="step", y="hard_auprc", hue="dataset", ax=ax)
+    ax.set_ylabel("Hard AUPRC")
+    ax.set_xlabel("Ablation step")
+    ax.tick_params(axis="x", rotation=15)
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
+def plot_robustness(df: pd.DataFrame, out_path: Path) -> None:
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+    for model, sub in df.groupby("model"):
+        ax.plot(sub["missing_frac"], sub["auprc_mean"], marker="o", label=model)
+        ax.fill_between(
+            sub["missing_frac"],
+            sub["auprc_mean"] - sub["auprc_std"],
+            sub["auprc_mean"] + sub["auprc_std"],
+            alpha=0.15,
+        )
+    ax.set_xlabel("Missing-edge fraction")
+    ax.set_ylabel("Test AUPRC")
+    ax.legend(frameon=False)
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
+def plot_pr_grid(
+    curves: dict[str, tuple[np.ndarray, np.ndarray]],
+    out_path: Path,
+) -> None:
+    names = list(curves.keys())
+    fig, axes = plt.subplots(2, 2, figsize=(8, 8))
+    for ax, name in zip(axes.ravel(), names):
+        prec, rec = curves[name]
+        ax.plot(rec, prec)
+        ax.set_title(name)
+        ax.set_xlabel("Recall")
+        ax.set_ylabel("Precision")
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+    fig.tight_layout()
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
+def write_summary(payload: dict[str, Any], out_path: Path) -> None:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def generate_all_figures(results_dir: str | Path, output_dir: str | Path) -> None:
+    results_dir = Path(results_dir)
+    output_dir = _ensure_dir(Path(output_dir))
+    uniform_path = results_dir / "uniform_vs_hard.csv"
+    if uniform_path.exists():
+        plot_uniform_vs_hard(pd.read_csv(uniform_path), output_dir / "fig1_uniform_vs_hard_auprc.png")
+    abl_path = results_dir / "ablation.csv"
+    if abl_path.exists():
+        plot_ablation_ladder(pd.read_csv(abl_path), output_dir / "fig2_ablation_ladder.png")
+    rob_path = results_dir / "robustness.csv"
+    if rob_path.exists():
+        plot_robustness(pd.read_csv(rob_path), output_dir / "fig3_missing_edge_robustness.png")
+    pr_path = results_dir / "pr_curves.npz"
+    if pr_path.exists():
+        blob = np.load(pr_path, allow_pickle=True)
+        curves = {k: (blob[f"{k}_prec"], blob[f"{k}_rec"]) for k in blob["datasets"]}
+        plot_pr_grid(curves, output_dir / "fig4_precision_recall_curves.png")
+
+
+def pr_arrays(labels: np.ndarray, probs: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    prec, rec, _ = precision_recall_curve(labels, probs)
+    return prec, rec
+
+
+pr_arrays = pr_arrays
+write_summary = write_summary
+generate_all_figures = generate_all_figures
+

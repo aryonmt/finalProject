@@ -1,0 +1,6 @@
+dataset: PPI
+bipartite: false
+input_type: one_hot
+hidden_dim: 64
+epochs: 30
+patience: 8
