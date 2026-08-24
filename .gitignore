@@ -41,8 +41,9 @@ checkpoints/
 *.ckpt
 runs/
 wandb/
-figures/
+figures/*
 !figures/.gitkeep
+!figures/*.png
 
 # env
 .env
