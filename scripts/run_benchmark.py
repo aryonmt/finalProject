@@ -18,7 +18,7 @@ from src.data.loader import load_dataset_splits
 from src.eval.plotting import pr_arrays, write_summary
 from src.models.factory import build_model
 from src.models.heuristics import compute_heuristic_scores
-from src.training.trainer import set_seed, train_one_model
+from src.training.trainer import extract_node_embeddings, set_seed, train_one_model
 
 
 def load_cfg(dataset: str) -> dict:
@@ -47,6 +47,36 @@ def _jsonify(obj):
     if isinstance(obj, np.ndarray):
         return obj.tolist()
     return obj
+
+
+def _merge_benchmark(path: Path, new_df: pd.DataFrame) -> pd.DataFrame:
+    keys = ["dataset", "model", "seed"]
+    if path.exists():
+        old = pd.read_csv(path)
+        if all(k in old.columns for k in keys) and all(k in new_df.columns for k in keys):
+            old_ix = old.set_index(keys).index
+            new_ix = new_df.set_index(keys).index
+            keep = old[~old_ix.isin(new_ix)]
+            return pd.concat([keep, new_df], ignore_index=True)
+    return new_df
+
+
+def _merge_summary(path: Path, payload: dict) -> dict:
+    if not path.exists():
+        return payload
+    old = json.loads(path.read_text(encoding="utf-8"))
+    old_runs = old.get("runs", [])
+    new_runs = payload.get("runs", [])
+
+    def _key(run: dict) -> tuple:
+        return (str(run.get("model", "")), int(run.get("seed", -1)))
+
+    new_keys = {_key(r) for r in new_runs}
+    kept = [r for r in old_runs if _key(r) not in new_keys]
+    merged = dict(old)
+    merged.update(payload)
+    merged["runs"] = kept + new_runs
+    return merged
 
 
 def run_heuristics(bundle, seed: int) -> dict:
@@ -106,6 +136,8 @@ def main() -> int:
     p.add_argument("--device", default="auto")
     p.add_argument("--input-type", default="one_hot")
     p.add_argument("--out", default="results")
+    p.add_argument("--save-embeddings", action="store_true")
+    p.add_argument("--save-checkpoints", action="store_true")
     args = p.parse_args()
 
     cfg = load_cfg(args.dataset)
@@ -182,10 +214,26 @@ def main() -> int:
             if model_name == "ams":
                 prec, rec_arr = pr_arrays(bundle.test.labels, metrics["test_probs"])
                 np.savez(out_dir / f"pr_ams_seed{seed}.npz", prec=prec, rec=rec_arr)
+            if args.save_embeddings:
+                emb = extract_node_embeddings(model, bundle)
+                np.savez_compressed(
+                    out_dir / f"embeddings_{model_name}_seed{seed}.npz",
+                    embeddings=emb.astype(np.float32),
+                    n_source=np.int32(bundle.n_source),
+                    bipartite=np.bool_(bundle.bipartite),
+                    dataset=np.asarray(args.dataset),
+                    model=np.asarray(model_name),
+                    seed=np.int32(seed),
+                )
+                print(f"saved embeddings {emb.shape}", flush=True)
+            if args.save_checkpoints:
+                ckpt_dir = out_dir / "checkpoints"
+                ckpt_dir.mkdir(parents=True, exist_ok=True)
+                torch.save(model.state_dict(), ckpt_dir / f"{model_name}_seed{seed}.pt")
 
-    df = pd.DataFrame(rows)
+    df = _merge_benchmark(out_dir / "benchmark.csv", pd.DataFrame(rows))
     df.to_csv(out_dir / "benchmark.csv", index=False)
-    write_summary(payload, out_dir / "summary.json")
+    write_summary(_merge_summary(out_dir / "summary.json", payload), out_dir / "summary.json")
     print(df.to_string(index=False), flush=True)
     print(f"wrote {out_dir}", flush=True)
     return 0

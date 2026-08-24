@@ -359,9 +359,66 @@ def generate_all_figures(results_dir: str | Path, output_dir: str | Path) -> Non
         if curves:
             plot_pr_grid(curves, output_dir / "fig4_precision_recall_curves.png")
 
+    plot_saved_embedding_tsne(results_dir, output_dir)
+
 
 def pr_arrays(labels: np.ndarray, probs: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     prec, rec, _ = precision_recall_curve(labels, probs)
     return prec, rec
+
+
+NODE_TYPE_NAMES = {
+    "DTI": ("Drug", "Gene"),
+    "GDI": ("Gene", "Disease"),
+}
+
+
+def plot_embedding_tsne(
+    embeddings: np.ndarray,
+    n_source: int,
+    dataset: str,
+    model: str,
+    out_path: Path,
+    seed: int = 42,
+    max_points: int = 4000,
+) -> None:
+    from sklearn.manifold import TSNE
+
+    emb = np.asarray(embeddings, dtype=np.float32)
+    n = emb.shape[0]
+    labels = np.array(["source"] * n_source + ["target"] * (n - n_source))
+    src_name, tgt_name = NODE_TYPE_NAMES.get(dataset.upper(), ("Source", "Target"))
+    names = np.array([src_name] * n_source + [tgt_name] * (n - n_source))
+    rng = np.random.default_rng(seed)
+    if n > max_points:
+        idx = rng.choice(n, size=max_points, replace=False)
+        emb = emb[idx]
+        names = names[idx]
+    coords = TSNE(n_components=2, perplexity=min(30, max(5, len(emb) // 10)), init="pca", random_state=seed).fit_transform(emb)
+    fig, ax = plt.subplots(figsize=(5.2, 4.6))
+    for name, color in ((src_name, "#1f4e79"), (tgt_name, "#c0392b")):
+        mask = names == name
+        ax.scatter(coords[mask, 0], coords[mask, 1], s=6, alpha=0.55, c=color, label=name, linewidths=0)
+    ax.set_xlabel("TSNE-C1")
+    ax.set_ylabel("TSNE-C2")
+    ax.set_title(f"{model}: {dataset}")
+    ax.legend(frameon=False, markerscale=2)
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
+def plot_saved_embedding_tsne(results_dir: Path, output_dir: Path) -> None:
+    files = sorted(Path(results_dir).rglob("embeddings_*.npz"))
+    if not files:
+        return
+    output_dir = _ensure_dir(Path(output_dir))
+    for path in files:
+        blob = np.load(path, allow_pickle=True)
+        dataset = str(blob["dataset"]) if "dataset" in blob.files else path.parent.name
+        model = str(blob["model"]) if "model" in blob.files else path.stem
+        seed = int(blob["seed"]) if "seed" in blob.files else 42
+        n_source = int(blob["n_source"])
+        out = output_dir / f"fig_tsne_{dataset}_{model}_seed{seed}.png"
+        plot_embedding_tsne(blob["embeddings"], n_source, dataset, model, out, seed=seed)
 
 

@@ -22,13 +22,21 @@ def set_seed(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def _skip_matrix(bundle: DatasetBundle, model: torch.nn.Module) -> torch.Tensor | None:
+def _skip_matrix(bundle: DatasetBundle, model: torch.nn.Module):
     kind = getattr(model, "skip_kind", "none")
     if kind == "binary":
         return bundle.f_skip_bin
     if kind == "weighted":
         return bundle.f_skip_weighted
+    if kind == "three_hop_bundle":
+        return (bundle.f_skip_weighted, bundle.f_3hop)
     return None
+
+
+def _unpack_logits(out) -> torch.Tensor:
+    if isinstance(out, (tuple, list)):
+        return out[0]
+    return out
 
 
 @torch.no_grad()
@@ -44,9 +52,24 @@ def predict_probs(
     outs: list[np.ndarray] = []
     for start in range(0, len(pairs), batch_size):
         batch = torch.as_tensor(pairs[start : start + batch_size], device=device)
-        logits, _ = model(bundle.features, bundle.f_orig, batch, skip)
+        out = model(bundle.features, bundle.f_orig, batch, skip)
+        logits = _unpack_logits(out)
         outs.append(torch.sigmoid(logits).detach().cpu().numpy())
     return np.concatenate(outs, axis=0) if outs else np.zeros((0,), dtype=np.float32)
+
+
+@torch.no_grad()
+def extract_node_embeddings(model: torch.nn.Module, bundle: DatasetBundle) -> np.ndarray:
+    """Return (n_nodes, d) embeddings from the trained encoder."""
+    model.eval()
+    skip = _skip_matrix(bundle, model)
+    dummy = torch.zeros((1, 2), dtype=torch.long, device=bundle.features.device)
+    out = model(bundle.features, bundle.f_orig, dummy, skip)
+    if isinstance(out, (tuple, list)) and len(out) >= 2:
+        emb = out[1]
+    else:
+        raise RuntimeError("model forward did not return embeddings")
+    return emb.detach().cpu().numpy()
 
 
 def train_one_model(
@@ -87,8 +110,13 @@ def train_one_model(
             pairs = pairs.to(device)
             labels = labels.to(device)
             opt.zero_grad(set_to_none=True)
-            logits, _ = model(bundle.features, bundle.f_orig, pairs, skip)
-            loss = loss_fn(logits, labels)
+            out = model(bundle.features, bundle.f_orig, pairs, skip)
+            if isinstance(out, tuple) and len(out) == 3:
+                logits, _, cl_loss = out
+                loss = loss_fn(logits, labels) + float(getattr(model, "lambda_cl", 0.1)) * cl_loss
+            else:
+                logits = _unpack_logits(out)
+                loss = loss_fn(logits, labels)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             opt.step()

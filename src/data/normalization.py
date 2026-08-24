@@ -63,3 +63,17 @@ def build_weighted_skip(adj: sp.spmatrix) -> sp.coo_matrix:
     w = w.tolil()
     w.setdiag(0)
     return w.tocoo()
+
+
+def build_three_hop_return(adj: sp.spmatrix) -> sp.coo_matrix:
+    """3-walk operator W3 = W2 D^{-1} A, where W2 is the RA skip graph."""
+    a = adj.tocsr().astype(np.float32)
+    deg = np.asarray(a.sum(axis=1)).flatten().astype(np.float32)
+    inv_deg = np.zeros_like(deg)
+    nz = deg > 0
+    inv_deg[nz] = 1.0 / deg[nz]
+    d_inv = sp.diags(inv_deg)
+    w2 = build_weighted_skip(a).tocsr()
+    w3 = (w2 @ d_inv @ a).tocsr()
+    w3.eliminate_zeros()
+    return w3.tocoo()

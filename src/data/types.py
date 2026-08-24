@@ -26,6 +26,7 @@ class DatasetBundle:
     f_orig: torch.Tensor
     f_skip_bin: torch.Tensor
     f_skip_weighted: torch.Tensor
+    f_3hop: torch.Tensor
     train: SplitArrays
     val: SplitArrays
     test: SplitArrays

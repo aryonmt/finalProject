@@ -9,8 +9,12 @@ from src.data.normalization import build_binary_skip, build_weighted_skip, lapla
 from src.data.samplers import generate_bipartite_aware_hard_negatives
 from src.eval.metrics import evaluate_at_threshold, find_optimal_f1_threshold
 from src.models.ams_skipgnn import AMSSkipGNN
+from src.models.contrastive_skipgnn import ContrastiveSkipGNN
+from src.models.factory import build_model
 from src.models.gcn import StandardGCN
+from src.models.skip_gat import SkipGATv2
 from src.models.skipgnn import SkipGNNBaseline
+from src.models.three_hop_skipgnn import ThreeHopSkipGNN
 
 
 def _tiny_adj(n: int = 12) -> sp.csr_matrix:
@@ -45,9 +49,14 @@ def test_models_forward_no_nan():
         StandardGCN(d, 8, 8, 8, 0.1),
         SkipGNNBaseline(d, 8, 8, 8, 0.1),
         AMSSkipGNN(d, 8, 8, 8, 0.1),
+        SkipGATv2(d, 8, 8, 8, 0.1, heads=2),
+        ThreeHopSkipGNN(d, 8, 8, 8, 0.1),
+        ContrastiveSkipGNN(d, 8, 8, 8, 0.1),
     ):
         model.eval()
-        logits, emb = model(x, adj, pairs, adj)
+        skip = (adj, adj) if isinstance(model, ThreeHopSkipGNN) else adj
+        out = model(x, adj, pairs, skip)
+        logits, emb = out[0], out[1]
         assert torch.isfinite(logits).all()
         assert torch.isfinite(emb).all()
         assert logits.shape == (4,)
@@ -155,3 +164,71 @@ def test_bipartite_heuristics_are_nonzero():
     hop3 = compute_heuristic_scores(adj, pairs, bipartite=True)
     assert np.allclose(hop1, 0.0)
     assert hop3[0] > 0
+
+
+def test_new_models_train_step_and_factory():
+    n, d = 12, 12
+    x = torch.eye(n)
+    idx = torch.stack([torch.arange(n), (torch.arange(n) + 1) % n])
+    adj = torch.sparse_coo_tensor(idx, torch.ones(n), (n, n)).coalesce()
+    pairs = torch.tensor([[0, 1], [2, 3], [4, 5], [6, 7]], dtype=torch.long)
+    y = torch.tensor([1.0, 0.0, 1.0, 0.0])
+    for name in ("gat", "3hop", "contrastive"):
+        class _B:
+            n_features = d
+
+        model = build_model(name, _B(), hidden1=8, hidden2=8, decoder_hidden=8, dropout=0.0)
+        model.train()
+        skip = (adj, adj) if name == "3hop" else adj
+        out = model(x, adj, pairs, skip)
+        loss = torch.nn.functional.binary_cross_entropy_with_logits(out[0], y)
+        if len(out) == 3:
+            loss = loss + out[2]
+        loss.backward()
+        assert torch.isfinite(loss).item()
+
+
+def test_three_hop_matrix_is_finite():
+    from src.data.normalization import build_three_hop_return, laplacian_normalize
+
+    adj = _tiny_adj(10)
+    w3 = build_three_hop_return(adj)
+    f3 = laplacian_normalize(w3, add_self_loops=False)
+    assert f3.shape == adj.shape
+    assert np.isfinite(f3.toarray()).all()
+
+
+def test_extract_node_embeddings_shape():
+    from src.data.types import DatasetBundle, SplitArrays
+    from src.training.trainer import extract_node_embeddings, set_seed
+
+    set_seed(0)
+    n, d = 10, 10
+    x = torch.eye(n)
+    idx = torch.stack([torch.arange(n), (torch.arange(n) + 1) % n])
+    adj = torch.sparse_coo_tensor(idx, torch.ones(n), (n, n)).coalesce()
+    zeros = np.zeros((2, 2), dtype=np.int64)
+    labels = np.array([1, 0], dtype=np.int32)
+    bundle = DatasetBundle(
+        name="toy",
+        n_nodes=n,
+        n_source=5,
+        n_target=5,
+        bipartite=True,
+        features=x,
+        adj_train=sp.csr_matrix((n, n), dtype=np.float32),
+        f_orig=adj,
+        f_skip_bin=adj,
+        f_skip_weighted=adj,
+        f_3hop=adj,
+        train=SplitArrays(zeros, labels),
+        val=SplitArrays(zeros, labels),
+        test=SplitArrays(zeros, labels),
+        known_positives=set(),
+        input_type="one_hot",
+    )
+    model = StandardGCN(d, 8, 8, 8, 0.0)
+    model.eval()
+    emb = extract_node_embeddings(model, bundle)
+    assert emb.shape[0] == n
+    assert np.isfinite(emb).all()

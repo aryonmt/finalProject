@@ -10,6 +10,7 @@ import torch
 from src.data.constants import DATA_RAW, DATASET_SPECS
 from src.data.normalization import (
     build_binary_skip,
+    build_three_hop_return,
     build_weighted_skip,
     identity_sparse,
     laplacian_normalize,
@@ -220,6 +221,7 @@ def load_dataset_splits(
     f_orig = laplacian_normalize(adj_train, add_self_loops=True)
     f_skip_bin = laplacian_normalize(build_binary_skip(adj_train), add_self_loops=False)
     f_skip_w = laplacian_normalize(build_weighted_skip(adj_train), add_self_loops=False)
+    f_3hop = laplacian_normalize(build_three_hop_return(adj_train), add_self_loops=False)
 
     known: set[tuple[int, int]] = set()
     for split in (train, val, test):
@@ -251,6 +253,7 @@ def load_dataset_splits(
         f_orig=scipy_to_torch_sparse(f_orig, device),
         f_skip_bin=scipy_to_torch_sparse(f_skip_bin, device),
         f_skip_weighted=scipy_to_torch_sparse(f_skip_w, device),
+        f_3hop=scipy_to_torch_sparse(f_3hop, device),
         train=train,
         val=val,
         test=test,
