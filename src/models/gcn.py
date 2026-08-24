@@ -8,6 +8,8 @@ from src.models.layers import SparseGraphConvolution
 
 
 class StandardGCN(nn.Module):
+    """Two-layer GCN on the original graph only (no skip graph)."""
+
     skip_kind = "none"
 
     def __init__(self, nfeat: int, nhid1: int, nhid2: int, nhid_dec: int, dropout: float = 0.5):

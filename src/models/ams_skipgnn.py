@@ -8,6 +8,8 @@ from src.models.layers import SparseGraphConvolution
 
 
 class AMSSkipGNN(nn.Module):
+    """SkipGNN plus resource-allocation skip, gated fusion, and a 4-way decoder."""
+
     skip_kind = "weighted"
 
     def __init__(
@@ -82,6 +84,7 @@ class AMSSkipGNN(nn.Module):
 
 
 def make_ablation(variant: str, **kwargs) -> nn.Module:
+    """Stepwise AMS ablations: binary skip → weighted skip → gate → 4-way decoder."""
     variant = variant.lower()
     if variant in {"0", "ablation_0_skipgnn", "skipgnn"}:
         from src.models.skipgnn import SkipGNNBaseline

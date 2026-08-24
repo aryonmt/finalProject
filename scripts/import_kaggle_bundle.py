@@ -31,6 +31,17 @@ def _find_payload(src: Path) -> Path:
     return src
 
 
+def _safe_extract(archive: zipfile.ZipFile, dest: Path) -> None:
+    dest = dest.resolve()
+    for info in archive.infolist():
+        target = (dest / info.filename).resolve()
+        try:
+            target.relative_to(dest)
+        except ValueError as exc:
+            raise SystemExit(f"refusing zip member outside staging: {info.filename}") from exc
+    archive.extractall(dest)
+
+
 def _unpack(src: Path, staging: Path) -> Path:
     if src.is_dir():
         return _find_payload(src)
@@ -40,7 +51,7 @@ def _unpack(src: Path, staging: Path) -> Path:
         shutil.rmtree(staging)
     staging.mkdir(parents=True)
     with zipfile.ZipFile(src) as zf:
-        zf.extractall(staging)
+        _safe_extract(zf, staging)
     return _find_payload(staging)
 
 
@@ -139,8 +150,13 @@ def import_payload(
     if src_notebooks.is_dir():
         nbs = sorted(src_notebooks.glob("*.ipynb"))
         if nbs:
-            dest_name = archive_notebook or f"kaggle_{nbs[0].stem}_executed.ipynb"
-            dest = repo / "notebooks" / Path(dest_name).name
+            dest_name = archive_notebook or f"notebooks/executed/{nbs[0].stem}_executed.ipynb"
+            rel = Path(dest_name)
+            if rel.is_absolute() or ".." in rel.parts:
+                raise SystemExit("archive-notebook must be a relative path under notebooks/")
+            if rel.parts[0] != "notebooks":
+                rel = Path("notebooks") / rel
+            dest = repo / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(nbs[0], dest)
             counts["notebooks"] += 1
@@ -148,7 +164,7 @@ def import_payload(
 
 
 def main() -> int:
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(description="Merge a Kaggle zip into results/ and figures/.")
     p.add_argument("--src", required=True, help="Kaggle zip or unpacked folder")
     p.add_argument("--archive-notebook", default="", help="Destination executed notebook name")
     p.add_argument("--copy-embeddings", action="store_true")

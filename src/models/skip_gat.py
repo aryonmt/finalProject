@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+"""SkipGATv2 with chunked sparse attention so GDI-scale skip graphs fit on a T4."""
+
 import os
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# Peak attention memory is O(chunk), not O(E). Lower this on small GPUs.
 EDGE_CHUNK = int(os.environ.get("GAT_EDGE_CHUNK", "131072"))
 
 

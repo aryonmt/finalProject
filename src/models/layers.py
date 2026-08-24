@@ -5,6 +5,8 @@ import torch.nn as nn
 
 
 class SparseGraphConvolution(nn.Module):
+    """GCN layer: `X W` then sparse `A @ support`. Accepts dense or sparse `X`."""
+
     def __init__(self, in_features: int, out_features: int, bias: bool = True):
         super().__init__()
         self.in_features = in_features

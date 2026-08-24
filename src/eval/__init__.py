@@ -1,3 +1,5 @@
+"""Dual-bank metrics and publication figures."""
+
 from src.eval.metrics import evaluate_at_threshold, evaluate_dual_bank, find_optimal_f1_threshold
 from src.eval.plotting import generate_all_figures
 

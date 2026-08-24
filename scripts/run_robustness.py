@@ -57,7 +57,7 @@ def drop_edges(bundle, frac: float, seed: int, device: torch.device):
 
 
 def main() -> int:
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(description="Retrain after randomly dropping train edges.")
     p.add_argument("--dataset", default="DTI")
     p.add_argument("--models", nargs="+", default=["gcn", "skipgnn", "ams"])
     p.add_argument("--fractions", nargs="+", type=float, default=[0.1, 0.3, 0.5, 0.7, 0.9])

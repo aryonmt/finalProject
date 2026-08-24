@@ -16,17 +16,18 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 BUNDLE_NAME = "ams_skipgnn_kaggle_bundle"
-NOTEBOOK_NAME = "ams_skipgnn_kaggle_runner.ipynb"
+NOTEBOOK_NAME = "kaggle_runner.ipynb"
 
-IMPORT_TXT = """Drop this zip at the repo root (D:/Projects/FinalProject or the Cursor workspace).
+IMPORT_TXT = """Drop this zip at the repo root.
 
-Layout matches the repo. After extract / import:
+After extract / import:
   results/     -> repo results/
   figures/     -> repo figures/
-  notebooks/ams_skipgnn_kaggle_runner.ipynb -> repo notebooks/ (executed, with prints)
+  notebooks/kaggle_runner.ipynb -> notebooks/executed/kaggle_run.ipynb
   MANIFEST.json -> git sha, STAGE, GPU, file list
 
-Do not commit the zip. Keep results/, figures/, and the executed notebook.
+Do not commit the zip. Keep results/, figures/, and the executed archive.
+Prefer: python scripts/import_kaggle_bundle.py --src ams_skipgnn_kaggle_bundle.zip --make-figures
 """
 
 
@@ -110,7 +111,7 @@ def pack_bundle(repo: Path, zip_stem: Path) -> Path:
         "import_map": {
             "results/": "results/",
             "figures/": "figures/",
-            f"notebooks/{NOTEBOOK_NAME}": f"notebooks/{NOTEBOOK_NAME}",
+            f"notebooks/{NOTEBOOK_NAME}": "notebooks/executed/kaggle_run.ipynb",
         },
     }
     try:

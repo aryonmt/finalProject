@@ -1,3 +1,5 @@
+"""Skip-graph operators and symmetric Laplacian normalization."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -34,6 +36,7 @@ def identity_sparse(n: int, device: torch.device | None = None) -> torch.Tensor:
 
 
 def laplacian_normalize(adj: sp.spmatrix, add_self_loops: bool) -> sp.coo_matrix:
+    """Symmetric D^{-1/2} A D^{-1/2}. Isolated nodes stay zero (no epsilon fill)."""
     adj = adj.tocsr().astype(np.float32)
     if add_self_loops:
         adj = adj + sp.eye(adj.shape[0], dtype=np.float32, format="csr")
@@ -46,6 +49,7 @@ def laplacian_normalize(adj: sp.spmatrix, add_self_loops: bool) -> sp.coo_matrix
 
 
 def build_binary_skip(adj: sp.spmatrix) -> sp.coo_matrix:
+    """Unweighted 2-hop skip A A^T with a zero diagonal."""
     a = adj.tocsr().astype(np.float32)
     skip = a @ a.T
     skip = skip.sign().tolil()

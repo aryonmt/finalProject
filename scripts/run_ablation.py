@@ -25,7 +25,7 @@ STEPS = [
 
 
 def main() -> int:
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(description="Four-step AMS ablation on one dataset.")
     p.add_argument("--dataset", default="DTI")
     p.add_argument("--seeds", nargs="+", type=int, default=[42, 123, 7])
     p.add_argument("--epochs", type=int, default=30)

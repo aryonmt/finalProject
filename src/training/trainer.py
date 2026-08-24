@@ -1,3 +1,5 @@
+"""BCE trainer with validation-AUPRC early stopping and dual-bank test metrics."""
+
 from __future__ import annotations
 
 import copy
@@ -6,8 +8,8 @@ from typing import Any, Callable
 
 import numpy as np
 import torch
+from sklearn.metrics import average_precision_score
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 from src.data.samplers import generate_bipartite_aware_hard_negatives
 from src.data.types import DatasetBundle, PairDataset
@@ -15,6 +17,7 @@ from src.eval.metrics import evaluate_dual_bank
 
 
 def set_seed(seed: int) -> None:
+    """Seed Python, NumPy, and Torch (CPU and CUDA)."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -23,6 +26,7 @@ def set_seed(seed: int) -> None:
 
 
 def _skip_matrix(bundle: DatasetBundle, model: torch.nn.Module):
+    """Pick the skip tensor(s) the model declared via `skip_kind`."""
     kind = getattr(model, "skip_kind", "none")
     if kind == "binary":
         return bundle.f_skip_bin
@@ -85,6 +89,11 @@ def train_one_model(
     seed: int = 42,
     log_fn: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
+    """Train with BCE (+ optional contrastive term), early-stop on val AUPRC.
+
+    After restoring the best checkpoint, scores the official uniform test split
+    and a hard negative bank sampled from the train graph only.
+    """
     set_seed(seed)
     device = bundle.features.device
     model = model.to(device)
@@ -125,8 +134,6 @@ def train_one_model(
             n_seen += bs
         epoch_loss = total_loss / max(1, n_seen)
         val_probs = predict_probs(model, bundle, bundle.val.pairs)
-        from sklearn.metrics import average_precision_score
-
         val_auprc = float(average_precision_score(bundle.val.labels, val_probs))
         history.append({"epoch": epoch, "loss": epoch_loss, "val_auprc": val_auprc})
         msg = f"epoch={epoch:02d} loss={epoch_loss:.4f} val_auprc={val_auprc:.4f}"

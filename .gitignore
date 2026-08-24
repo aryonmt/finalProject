@@ -24,6 +24,7 @@ data/raw/**/*.emb.txt
 # run artifacts: keep tables, summaries, and PR curves
 results/*
 !results/.gitkeep
+!results/README.md
 !results/DTI/
 !results/DTI/**
 !results/DDI/
@@ -46,7 +47,11 @@ runs/
 wandb/
 figures/*
 !figures/.gitkeep
+!figures/README.md
 !figures/*.png
+
+# Kaggle / review archives
+*.zip
 
 # env
 .env

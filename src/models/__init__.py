@@ -1,3 +1,5 @@
+"""Encoders, the model factory, and the unsupervised heuristic baseline."""
+
 from src.models.ams_skipgnn import AMSSkipGNN, make_ablation
 from src.models.contrastive_skipgnn import ContrastiveSkipGNN
 from src.models.factory import build_model

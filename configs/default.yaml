@@ -1,13 +1,13 @@
-hidden_dim: 64
+hidden_dim: 64          # GCN / skip hidden size
 decoder_hidden: 64
 dropout: 0.5
 lr: 0.001
 weight_decay: 0.0005
-batch_size: 128
+batch_size: 128         # Kaggle extra-model runs override this on the CLI
 epochs: 30
-patience: 8
+patience: 8             # early stop on validation AUPRC
 grad_clip: 5.0
-input_type: one_hot
+input_type: one_hot     # reported runs; node2vec is optional
 seeds_stage1: [42, 123, 7]
 seeds_full: [42, 123, 7, 2024, 11]
 missing_fractions: [0.1, 0.3, 0.5, 0.7, 0.9]

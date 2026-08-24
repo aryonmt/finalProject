@@ -49,6 +49,7 @@ def compute_heuristic_scores(
     method: str = "resource_allocation",
     bipartite: bool = False,
 ) -> np.ndarray:
+    """Unsupervised link scores. Bipartite graphs use 3-walk RA (1-hop CN is empty)."""
     csr = adj.tocsr().astype(np.float32)
     if bipartite:
         return _bipartite_three_walk_scores(csr, pairs)

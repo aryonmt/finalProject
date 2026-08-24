@@ -98,7 +98,7 @@ def test_ddi_shapes_and_no_leakage():
     from src.data.loader import load_dataset_splits
 
     bundle = load_dataset_splits("DDI", device=torch.device("cpu"))
-    assert bundle.n_nodes in {1514, bundle.n_nodes}
+    assert bundle.n_nodes == 1514
     assert bundle.adj_train.shape == (bundle.n_nodes, bundle.n_nodes)
     train_pos = {tuple(map(int, p)) for p in bundle.train.pairs[bundle.train.labels >= 0.5]}
     val_pos = {tuple(map(int, p)) for p in bundle.val.pairs[bundle.val.labels >= 0.5]}

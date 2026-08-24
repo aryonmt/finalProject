@@ -1,3 +1,5 @@
+"""Train named models on one dataset and merge metrics into results/."""
+
 from __future__ import annotations
 
 import argparse
@@ -127,25 +129,42 @@ def run_heuristics(bundle, seed: int) -> dict:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(
+        description="Train named models on one dataset and merge rows into results/<DS>/benchmark.csv."
+    )
     p.add_argument("--dataset", default="DTI", choices=["DTI", "DDI", "PPI", "GDI"])
     p.add_argument("--models", nargs="+", default=["gcn", "skipgnn", "ams", "heuristic"])
     p.add_argument("--seeds", nargs="+", type=int, default=None)
     p.add_argument("--epochs", type=int, default=None)
     p.add_argument("--batch-size", type=int, default=None)
-    p.add_argument("--quick", action="store_true")
+    p.add_argument(
+        "--quick",
+        action="store_true",
+        help="CPU smoke: 2 epochs, seed 42. Never treat these numbers as paper results.",
+    )
     p.add_argument("--device", default="auto")
     p.add_argument("--input-type", default="one_hot")
-    p.add_argument("--out", default="results")
+    p.add_argument(
+        "--out",
+        default=None,
+        help="Results root. Default: results/ (paper tables) or results/temp/ with --quick.",
+    )
     p.add_argument("--save-embeddings", action="store_true")
     p.add_argument("--save-checkpoints", action="store_true")
     args = p.parse_args()
+    if args.out is None:
+        args.out = "results/temp" if args.quick else "results"
 
     cfg = load_cfg(args.dataset)
     epochs = args.epochs or (2 if args.quick else int(cfg.get("epochs", 30)))
     batch_size = args.batch_size or int(cfg.get("batch_size", 128))
     seeds = args.seeds or ([42] if args.quick else list(cfg.get("seeds_stage1", [42, 123, 7])))
     device = device_of(args.device)
+    if args.quick:
+        print(
+            f"SMOKE RUN (--quick): writing under {args.out}. Do not quote these metrics.",
+            flush=True,
+        )
     print(
         f"dataset={args.dataset} device={device} epochs={epochs} "
         f"batch_size={batch_size} seeds={seeds} models={args.models}",

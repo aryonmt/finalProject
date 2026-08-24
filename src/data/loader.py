@@ -1,3 +1,5 @@
+"""Load Huang et al. fold-1 CSVs into a leak-free DatasetBundle."""
+
 from __future__ import annotations
 
 from pathlib import Path

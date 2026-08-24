@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Dataset sizes, upstream paths, and default hyperparameters."""
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any

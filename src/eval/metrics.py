@@ -1,3 +1,5 @@
+"""Validation-only F1 thresholding plus AUROC / AUPRC / Brier helpers."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -31,6 +33,7 @@ def evaluate_at_threshold(
     labels: np.ndarray,
     threshold: float = 0.5,
 ) -> dict[str, float]:
+    """AUROC, AUPRC, F1, and Brier score at a frozen threshold."""
     probs = np.asarray(probs, dtype=np.float64)
     labels = np.asarray(labels, dtype=np.int32)
     preds = (probs >= threshold).astype(np.int32)
@@ -51,6 +54,7 @@ def evaluate_dual_bank(
     hard_probs: np.ndarray,
     hard_labels: np.ndarray,
 ) -> dict[str, Any]:
+    """Fit τ* on validation F1, then score uniform and hard test banks."""
     tau = find_optimal_f1_threshold(val_probs, val_labels)
     out: dict[str, Any] = {"tau_star": tau}
     for name, probs, labels in (

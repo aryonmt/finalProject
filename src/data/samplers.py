@@ -1,3 +1,5 @@
+"""Uniform and degree-biased negative pair sampling."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -12,6 +14,7 @@ def generate_uniform_negatives(
     bipartite: bool = False,
     n_source: int | None = None,
 ) -> np.ndarray:
+    """Sample negatives uniformly, never repeating a known positive."""
     pairs: list[tuple[int, int]] = []
     n_source = n_nodes if n_source is None else n_source
     while len(pairs) < n_samples:
@@ -40,6 +43,7 @@ def generate_bipartite_aware_hard_negatives(
     num_target_nodes: int,
     seed: int = 42,
 ) -> np.ndarray:
+    """Degree-quartile negatives that stay on the correct side of a bipartite cut."""
     rng = np.random.default_rng(seed)
     total_nodes = train_adj.shape[0]
     degrees = np.asarray(train_adj.sum(axis=1)).flatten()

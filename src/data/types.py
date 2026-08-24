@@ -10,12 +10,22 @@ from torch.utils.data import Dataset
 
 @dataclass
 class SplitArrays:
+    """Edge list for one split: `pairs` is (N, 2) int64, `labels` is (N,) float/int."""
+
     pairs: np.ndarray
     labels: np.ndarray
 
 
 @dataclass
 class DatasetBundle:
+    """Leak-free graph + splits used by every trainer and metric helper.
+
+    `adj_train` and the Laplacian tensors (`f_orig`, `f_skip_*`, `f_3hop`) are
+    built from **train positives only**. Val/test edges never enter the graph.
+    For bipartite datasets, sources occupy `[0, n_source)` and targets occupy
+    `[n_source, n_nodes)`.
+    """
+
     name: str
     n_nodes: int
     n_source: int

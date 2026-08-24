@@ -1,3 +1,5 @@
+"""Leak-free loaders, skip-graph builders, and pair samplers."""
+
 from src.data.loader import load_dataset_splits
 from src.data.types import DatasetBundle
 
