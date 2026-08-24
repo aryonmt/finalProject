@@ -102,6 +102,12 @@ def _build_idx_map(
     _unique_extend(targets, seen, leftover)
 
     idx_map = {eid: i for i, eid in enumerate(sources + targets)}
+    expected = int(DATASET_SPECS[dataset]["n_source_expected"])
+    if abs(len(sources) - expected) > 1:
+        raise RuntimeError(
+            f"{dataset}: n_source={len(sources)} vs expected {expected}. "
+            "Source/target typing heuristic likely failed."
+        )
     return idx_map, len(sources), len(targets)
 
 
@@ -196,6 +202,10 @@ def load_dataset_splits(
         bool(spec["bipartite"]),
     )
     n_nodes = len(idx_map)
+
+    expected_n = int(spec["n_nodes_expected"])
+    if abs(n_nodes - expected_n) > 1:
+        raise RuntimeError(f"{name}: n_nodes={n_nodes} vs expected {expected_n}")
 
     train = _pairs_from_df(train_df, idx_map, src_col, tgt_col, label_col)
     val = _pairs_from_df(val_df, idx_map, src_col, tgt_col, label_col)

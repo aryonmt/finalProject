@@ -36,3 +36,8 @@ figures/
 # env
 .env
 .env.*
+
+# local AI review dump
+review_bundle.txt
+ams_skipgnn_kaggle_bundle.zip
+kaggle_bundle/

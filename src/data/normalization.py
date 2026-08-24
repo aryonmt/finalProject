@@ -37,12 +37,10 @@ def laplacian_normalize(adj: sp.spmatrix, add_self_loops: bool) -> sp.coo_matrix
     adj = adj.tocsr().astype(np.float32)
     if add_self_loops:
         adj = adj + sp.eye(adj.shape[0], dtype=np.float32, format="csr")
-    deg = np.asarray(adj.sum(axis=1)).flatten()
-    if add_self_loops:
-        inv_sqrt = np.power(np.maximum(deg, 1e-12), -0.5)
-    else:
-        inv_sqrt = np.power(np.maximum(deg, 1e-5), -0.5)
-    inv_sqrt[np.isinf(inv_sqrt)] = 0.0
+    deg = np.asarray(adj.sum(axis=1)).flatten().astype(np.float32)
+    inv_sqrt = np.zeros_like(deg)
+    mask = deg > 0
+    inv_sqrt[mask] = np.power(deg[mask], -0.5)
     d = sp.diags(inv_sqrt)
     return (d @ adj @ d).tocoo()
 

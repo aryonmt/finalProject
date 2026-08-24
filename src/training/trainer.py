@@ -142,12 +142,5 @@ def train_one_model(
     metrics["hard_labels"] = hard_labels
     metrics["hard_probs"] = hard_p
     metrics["test_probs"] = test_p
-    metrics["test_probs"] = test_p
     return metrics
-
-
-train_one_model = train_one_model
-predict_probs = predict_probs
-train_one_model = train_one_model
-predict_probs = predict_probs
 

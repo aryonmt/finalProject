@@ -8,55 +8,48 @@ The Kaggle notebook (`notebooks/ams_skipgnn_kaggle_runner.ipynb`) executes the c
 
 ### 1.1 Kaggle Notebook Cells Execution Sequence
 
-```python
-# ==============================================================================
-# Cell 1: Environment Setup & Repository Installation
-# ==============================================================================
-import os, sys, subprocess, torch
+The archived notebook is the source of truth. It clones `aryonmt/finalProject`, installs the package, fetches SkipGNN fold-1 splits, then branches on `STAGE`:
 
-print(f"PyTorch Version: {torch.__version__}")
-print(f"CUDA Available: {torch.cuda.is_available()} | Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
+| `STAGE` | What runs |
+| --- | --- |
+| `0` | Smoke: `run_benchmark.py --dataset DTI --quick` (2 epochs, 1 seed) |
+| `1` (default) | Real MVP: DTI + DDI, 3 seeds, full epochs, models `gcn skipgnn ams heuristic`. **No `--quick`.** Download `results/` before starting Stage 2. |
+| `2` | Stage 1, then ablation + robustness on DTI, then PPI + GDI |
 
-!git clone https://github.com/{YOUR_GITHUB_USERNAME}/AMS-SkipGNN.git /kaggle/working/AMS-SkipGNN
-%cd /kaggle/working/AMS-SkipGNN
-!pip install -e . --no-deps
+CLI is `--dataset` (singular). Loop in the notebook, or call the script once per dataset:
 
-# ==============================================================================
-# Cell 2: Step 0 - Timing Dry-Run (1 Epoch on DTI)
-# ==============================================================================
-!python scripts/run_benchmark.py --dataset DTI --models ams_full --seeds 42 --epochs 1 --dry_run
-
-# ==============================================================================
-# Cell 3: Step 1 - Mandatory MVP (DTI + DDI, 3 Seeds)
-# ==============================================================================
-!python scripts/run_benchmark.py --quick --seeds 42 13 29
-
-# ==============================================================================
-# Cell 4: Step 2 - Extended Grid & Ablations (PPI + GDI + Full Seeds)
-# ==============================================================================
-!python scripts/run_benchmark.py --datasets PPI GDI --models baseline ams_full --seeds 42 13 29 71 101
-!python scripts/run_ablation.py --dataset DTI --seeds 42 13 29
-!python scripts/run_robustness.py --dataset DTI --fractions 0.1 0.3 0.5 0.7 0.9
-
-# ==============================================================================
-# Cell 5: Step 3 - Publication Plotting & Bundle Export
-# ==============================================================================
-!python -m src.evaluation.plotting --results_dir results/ --output_dir figures/
-!zip -r /kaggle/working/ams_skipgnn_delivery_bundle.zip figures/ results/
-print("SUCCESS: Delivery bundle created at /kaggle/working/ams_skipgnn_delivery_bundle.zip")
+```bash
+python scripts/run_benchmark.py --dataset DTI --models gcn skipgnn ams heuristic
+python scripts/run_benchmark.py --dataset DDI --models gcn skipgnn ams heuristic
+python scripts/run_ablation.py --dataset DTI
+python scripts/run_robustness.py --dataset DTI
+python scripts/make_figures.py
 ```
 
 ---
 
 ## 2. Unified CLI Interface Specifications
 
-### 2.1 `scripts/run_benchmark.py` Flags
-- `--quick`: Executes the Stage 1 MVP protocol (Datasets: `DTI`, `DDI`; Models: `gcn`, `baseline`, `ams_full`; Seeds: `42, 13, 29`).
-- `--datasets`: Explicit list of datasets (`DTI`, `DDI`, `PPI`, `GDI`).
-- `--models`: Explicit list of models (`gcn`, `baseline`, `ams_full`, `heuristics`).
-- `--seeds`: List of random seeds.
-- `--device`: Target device (`cuda:0` or `cpu`).
-- `--dry_run`: Runs a single 1-epoch profiling pass to estimate total runtime.
+### 2.1 `scripts/run_benchmark.py` flags
+
+- `--dataset`: one of `DTI`, `DDI`, `PPI`, `GDI` (run the notebook loop or call the script once per dataset).
+- `--models`: `gcn`, `skipgnn`, `ams`, `heuristic`.
+- `--seeds`: random seeds. Stage 1 default is `42 123 7`.
+- `--epochs`: training epochs. Default comes from `configs/default.yaml` (30).
+- `--quick`: smoke test only (`2` epochs, seed `42`). Do **not** use this for Stage 1 numbers.
+- `--device`: `auto`, `cpu`, or `cuda`.
+- `--input-type`: `one_hot` (default) or `node2vec`.
+- `--out`: results root (default `results/`). Writes `results/{DATASET}/benchmark.csv`.
+
+Stage 1 (real MVP): DTI + DDI, 3 seeds, full epochs, no `--quick`.
+
+```bash
+python scripts/run_benchmark.py --dataset DTI --models gcn skipgnn ams heuristic
+python scripts/run_benchmark.py --dataset DDI --models gcn skipgnn ams heuristic
+python scripts/run_ablation.py --dataset DTI --seeds 42 123 7
+python scripts/run_robustness.py --dataset DTI
+python scripts/make_figures.py
+```
 
 ---
 

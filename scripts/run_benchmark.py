@@ -37,16 +37,26 @@ def device_of(name: str) -> torch.device:
 
 
 def _jsonify(obj):
+    drop = {"hard_pairs", "hard_labels", "hard_probs", "test_probs"}
     if isinstance(obj, dict):
-        return {k: _jsonify(v) for k, v in obj.items() if k not in {"hard_pairs", "hard_labels", "hard_probs", "test_probs", "history"}}
+        return {k: _jsonify(v) for k, v in obj.items() if k not in drop}
+    if isinstance(obj, (list, tuple)):
+        return [_jsonify(x) for x in obj]
     if isinstance(obj, (np.floating, np.integer)):
         return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
     return obj
 
 
 def run_heuristics(bundle, seed: int) -> dict:
     set_seed(seed)
-    scores = compute_heuristic_scores(bundle.adj_train, bundle.test.pairs, method="resource_allocation")
+    scores = compute_heuristic_scores(
+        bundle.adj_train,
+        bundle.test.pairs,
+        method="resource_allocation",
+        bipartite=bundle.bipartite,
+    )
     from sklearn.metrics import average_precision_score, roc_auc_score
 
     return {
@@ -59,7 +69,7 @@ def run_heuristics(bundle, seed: int) -> dict:
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--dataset", default="DTI", choices=["DTI", "DDI", "PPI", "GDI"])
-    p.add_argument("--models", nargs="+", default=["gcn", "skipgnn", "ams"])
+    p.add_argument("--models", nargs="+", default=["gcn", "skipgnn", "ams", "heuristic"])
     p.add_argument("--seeds", nargs="+", type=int, default=None)
     p.add_argument("--epochs", type=int, default=None)
     p.add_argument("--quick", action="store_true")
@@ -90,7 +100,7 @@ def main() -> int:
         if model_name == "heuristic":
             for seed in seeds:
                 h = run_heuristics(bundle, seed)
-                h.update({"model": "heuristic", "seed": seed})
+                h.update({"model": "heuristic", "seed": seed, "dataset": args.dataset})
                 payload["runs"].append(h)
                 rows.append(h)
                 print(f"heuristic seed={seed} auprc={h['auprc']:.4f}", flush=True)
@@ -117,6 +127,7 @@ def main() -> int:
                 seed=seed,
             )
             rec = {
+                "dataset": args.dataset,
                 "model": model_name,
                 "seed": seed,
                 "uniform_auprc": metrics["test_uniform@0.5"]["auprc"],

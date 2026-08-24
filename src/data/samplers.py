@@ -90,7 +90,7 @@ def generate_bipartite_aware_hard_negatives(
                 found = True
                 break
         if not found:
-            while True:
+            for _ in range(1000):
                 neg_v = int(rng.choice(target_indices))
                 if is_bipartite:
                     valid = (u, neg_v) not in known_positives and u != neg_v
@@ -103,6 +103,8 @@ def generate_bipartite_aware_hard_negatives(
                 if valid:
                     hard_negatives.append((u, neg_v))
                     break
+            else:
+                hard_negatives.append((u, int(rng.choice(target_indices))))
 
     _ = num_target_nodes
     return np.asarray(hard_negatives, dtype=np.int64)

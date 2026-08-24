@@ -104,28 +104,74 @@ def write_summary(payload: dict[str, Any], out_path: Path) -> None:
 def generate_all_figures(results_dir: str | Path, output_dir: str | Path) -> None:
     results_dir = Path(results_dir)
     output_dir = _ensure_dir(Path(output_dir))
-    uniform_path = results_dir / "uniform_vs_hard.csv"
-    if uniform_path.exists():
-        plot_uniform_vs_hard(pd.read_csv(uniform_path), output_dir / "fig1_uniform_vs_hard_auprc.png")
-    abl_path = results_dir / "ablation.csv"
-    if abl_path.exists():
-        plot_ablation_ladder(pd.read_csv(abl_path), output_dir / "fig2_ablation_ladder.png")
-    rob_path = results_dir / "robustness.csv"
-    if rob_path.exists():
-        plot_robustness(pd.read_csv(rob_path), output_dir / "fig3_missing_edge_robustness.png")
-    pr_path = results_dir / "pr_curves.npz"
-    if pr_path.exists():
-        blob = np.load(pr_path, allow_pickle=True)
-        curves = {k: (blob[f"{k}_prec"], blob[f"{k}_rec"]) for k in blob["datasets"]}
-        plot_pr_grid(curves, output_dir / "fig4_precision_recall_curves.png")
+
+    bench_files = list(results_dir.rglob("benchmark.csv"))
+    if bench_files:
+        frames = []
+        for path in bench_files:
+            df = pd.read_csv(path)
+            if "dataset" not in df.columns:
+                df["dataset"] = path.parent.name
+            frames.append(df)
+        merged = pd.concat(frames, ignore_index=True)
+        records: list[dict[str, Any]] = []
+        for (dataset, model), group in merged.groupby(["dataset", "model"]):
+            key = str(model).lower()
+            if key == "skipgnn":
+                label = "SkipGNN"
+            elif key == "ams":
+                label = "AMS"
+            else:
+                continue
+            if "uniform_auprc" not in group.columns:
+                continue
+            records.append(
+                {
+                    "dataset": dataset,
+                    "auprc": float(group["uniform_auprc"].mean()),
+                    "series": f"{label} Uniform",
+                }
+            )
+            records.append(
+                {
+                    "dataset": dataset,
+                    "auprc": float(group["hard_auprc"].mean()),
+                    "series": f"{label} Hard",
+                }
+            )
+        if records:
+            plot_uniform_vs_hard(pd.DataFrame(records), output_dir / "fig1_uniform_vs_hard_auprc.png")
+
+    abl_files = list(results_dir.rglob("ablation.csv"))
+    if abl_files:
+        plot_ablation_ladder(
+            pd.concat([pd.read_csv(f) for f in abl_files], ignore_index=True),
+            output_dir / "fig2_ablation_ladder.png",
+        )
+    rob_files = list(results_dir.rglob("robustness.csv"))
+    if rob_files:
+        plot_robustness(
+            pd.concat([pd.read_csv(f) for f in rob_files], ignore_index=True),
+            output_dir / "fig3_missing_edge_robustness.png",
+        )
+
+    pr_files = list(results_dir.rglob("pr_ams_seed*.npz"))
+    if pr_files:
+        curves: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+        for path in sorted(pr_files):
+            dataset = path.parent.name
+            if dataset in curves:
+                continue
+            blob = np.load(path)
+            prec = blob["prec"] if "prec" in blob.files else blob["precision"]
+            rec = blob["rec"] if "rec" in blob.files else blob["recall"]
+            curves[dataset] = (prec, rec)
+        if curves:
+            plot_pr_grid(curves, output_dir / "fig4_precision_recall_curves.png")
 
 
 def pr_arrays(labels: np.ndarray, probs: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     prec, rec, _ = precision_recall_curve(labels, probs)
     return prec, rec
 
-
-pr_arrays = pr_arrays
-write_summary = write_summary
-generate_all_figures = generate_all_figures
 

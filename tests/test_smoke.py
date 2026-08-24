@@ -127,3 +127,31 @@ def test_dti_bipartite_ranges():
     )
     assert np.all(hard[:, 0] < bundle.n_source)
     assert np.all(hard[:, 1] >= bundle.n_source)
+
+
+def test_laplacian_isolated_nodes_are_zero():
+    adj = sp.csr_matrix(np.zeros((4, 4), dtype=np.float32))
+    adj[0, 1] = 1.0
+    adj[1, 0] = 1.0
+    norm = laplacian_normalize(adj, add_self_loops=False).tocsr()
+    # degree-0 nodes must not be inflated by 1e-5 clipping
+    assert float(norm[2, 2]) == 0.0
+    assert float(norm[3, 3]) == 0.0
+    assert np.isfinite(norm.toarray()).all()
+
+
+def test_bipartite_heuristics_are_nonzero():
+    from src.models.heuristics import compute_heuristic_scores
+
+    n_src, n_tgt = 6, 5
+    n = n_src + n_tgt
+    # undirected bipartite edges: 0-6, 0-7, 1-6, 2-8, 3-9
+    rows = np.array([0, 0, 1, 2, 3, 6, 7, 6, 8, 9], dtype=np.int64)
+    cols = np.array([6, 7, 6, 8, 9, 0, 0, 1, 2, 3], dtype=np.int64)
+    adj = sp.coo_matrix((np.ones(len(rows), np.float32), (rows, cols)), shape=(n, n)).tocsr()
+    # 1->6->0->7 is a 3-walk; 1-hop common neighbors are empty on bipartite graphs
+    pairs = np.array([[1, 7], [0, 8]], dtype=np.int64)
+    hop1 = compute_heuristic_scores(adj, pairs, bipartite=False)
+    hop3 = compute_heuristic_scores(adj, pairs, bipartite=True)
+    assert np.allclose(hop1, 0.0)
+    assert hop3[0] > 0

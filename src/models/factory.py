@@ -33,7 +33,3 @@ def build_model(
     return make_ablation(key, **kwargs)
 
 
-build_model = build_model
-build_model = build_model
-
-
