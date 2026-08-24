@@ -54,9 +54,20 @@ MODEL_LABELS = {
 }
 
 
+_SKIP_RESULT_PARTS = {"temp", "_kaggle_bundle_staging", ".git"}
+
+
 def _ensure_dir(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def _result_files(results_dir: Path, pattern: str) -> list[Path]:
+    return [
+        path
+        for path in Path(results_dir).rglob(pattern)
+        if not _SKIP_RESULT_PARTS.intersection(path.parts)
+    ]
 
 
 def plot_uniform_vs_hard(df: pd.DataFrame, out_path: Path) -> None:
@@ -130,7 +141,7 @@ def _metric_mean(group: pd.DataFrame, primary: str, fallback: str | None = None)
 
 
 def _load_benchmarks(results_dir: Path) -> pd.DataFrame | None:
-    bench_files = list(results_dir.rglob("benchmark.csv"))
+    bench_files = _result_files(results_dir, "benchmark.csv")
     if not bench_files:
         return None
     frames = []
@@ -234,7 +245,7 @@ def plot_uniform_vs_hard_auroc(df: pd.DataFrame, out_path: Path) -> None:
 
 def plot_learning_curves(results_dir: Path, out_path: Path) -> None:
     series: dict[tuple[str, str], list[pd.DataFrame]] = {}
-    for path in sorted(results_dir.rglob("summary.json")):
+    for path in sorted(_result_files(results_dir, "summary.json")):
         blob = json.loads(path.read_text(encoding="utf-8"))
         dataset = blob.get("dataset", path.parent.name)
         for run in blob.get("runs", []):
@@ -292,7 +303,11 @@ def write_comparison_table(df: pd.DataFrame, out_path: Path) -> None:
     pd.DataFrame(rows).sort_values(["dataset", "model"]).to_csv(out_path, index=False)
 
 
-def generate_all_figures(results_dir: str | Path, output_dir: str | Path) -> None:
+def generate_all_figures(
+    results_dir: str | Path,
+    output_dir: str | Path,
+    skip_tsne: bool = False,
+) -> None:
     results_dir = Path(results_dir)
     output_dir = _ensure_dir(Path(output_dir))
 
@@ -332,20 +347,20 @@ def generate_all_figures(results_dir: str | Path, output_dir: str | Path) -> Non
         write_comparison_table(merged, results_dir / "model_comparison.csv")
     plot_learning_curves(results_dir, output_dir / "fig9_learning_curves.png")
 
-    abl_files = list(results_dir.rglob("ablation.csv"))
+    abl_files = _result_files(results_dir, "ablation.csv")
     if abl_files:
         plot_ablation_ladder(
             pd.concat([pd.read_csv(f) for f in abl_files], ignore_index=True),
             output_dir / "fig2_ablation_ladder.png",
         )
-    rob_files = list(results_dir.rglob("robustness.csv"))
+    rob_files = _result_files(results_dir, "robustness.csv")
     if rob_files:
         plot_robustness(
             pd.concat([pd.read_csv(f) for f in rob_files], ignore_index=True),
             output_dir / "fig3_missing_edge_robustness.png",
         )
 
-    pr_files = list(results_dir.rglob("pr_ams*.npz"))
+    pr_files = _result_files(results_dir, "pr_ams*.npz")
     if pr_files:
         curves: dict[str, tuple[np.ndarray, np.ndarray]] = {}
         for path in sorted(pr_files):
@@ -359,7 +374,8 @@ def generate_all_figures(results_dir: str | Path, output_dir: str | Path) -> Non
         if curves:
             plot_pr_grid(curves, output_dir / "fig4_precision_recall_curves.png")
 
-    plot_saved_embedding_tsne(results_dir, output_dir)
+    if not skip_tsne:
+        plot_saved_embedding_tsne(results_dir, output_dir)
 
 
 def pr_arrays(labels: np.ndarray, probs: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -408,7 +424,7 @@ def plot_embedding_tsne(
 
 
 def plot_saved_embedding_tsne(results_dir: Path, output_dir: Path) -> None:
-    files = sorted(Path(results_dir).rglob("embeddings_*.npz"))
+    files = sorted(_result_files(results_dir, "embeddings_*.npz"))
     if not files:
         return
     output_dir = _ensure_dir(Path(output_dir))

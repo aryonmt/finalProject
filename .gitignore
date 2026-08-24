@@ -35,6 +35,9 @@ results/*
 !results/*.csv
 !results/*.json
 results/**/*.zip
+results/temp/
+results/**/embeddings_*.npz
+results/**/checkpoints/
 checkpoints/
 *.pt
 *.pth

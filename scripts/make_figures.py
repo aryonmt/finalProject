@@ -15,8 +15,9 @@ def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--results", default="results")
     p.add_argument("--out", default="figures")
+    p.add_argument("--skip-tsne", action="store_true")
     args = p.parse_args()
-    generate_all_figures(ROOT / args.results, ROOT / args.out)
+    generate_all_figures(ROOT / args.results, ROOT / args.out, skip_tsne=bool(args.skip_tsne))
     print(f"figures written to {ROOT / args.out}", flush=True)
     return 0
 

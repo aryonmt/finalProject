@@ -1803,24 +1803,30 @@
       ]
     },
     {
-      "auroc": 0.9031177413550564,
-      "auprc": 0.8894209326085507,
+      "uniform_auroc": 0.9031177413550564,
+      "uniform_auprc": 0.8894209326085507,
+      "hard_auroc": 0.6943354693727133,
+      "hard_auprc": 0.6698229341029523,
       "method": "resource_allocation",
       "model": "heuristic",
       "seed": 42,
       "dataset": "DDI"
     },
     {
-      "auroc": 0.9031177413550564,
-      "auprc": 0.8894209326085507,
+      "uniform_auroc": 0.9031177413550564,
+      "uniform_auprc": 0.8894209326085507,
+      "hard_auroc": 0.6985290476186666,
+      "hard_auprc": 0.6736020828150056,
       "method": "resource_allocation",
       "model": "heuristic",
       "seed": 123,
       "dataset": "DDI"
     },
     {
-      "auroc": 0.9031177413550564,
-      "auprc": 0.8894209326085507,
+      "uniform_auroc": 0.9031177413550564,
+      "uniform_auprc": 0.8894209326085507,
+      "hard_auroc": 0.698386082211547,
+      "hard_auprc": 0.6738722610702021,
       "method": "resource_allocation",
       "model": "heuristic",
       "seed": 7,
