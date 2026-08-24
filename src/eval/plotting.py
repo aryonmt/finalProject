@@ -117,7 +117,7 @@ def generate_all_figures(results_dir: str | Path, output_dir: str | Path) -> Non
         records: list[dict[str, Any]] = []
         for (dataset, model), group in merged.groupby(["dataset", "model"]):
             key = str(model).lower()
-            if key == "skipgnn":
+            if key in {"skipgnn", "skipgnn"}:
                 label = "SkipGNN"
             elif key == "ams":
                 label = "AMS"
@@ -155,7 +155,7 @@ def generate_all_figures(results_dir: str | Path, output_dir: str | Path) -> Non
             output_dir / "fig3_missing_edge_robustness.png",
         )
 
-    pr_files = list(results_dir.rglob("pr_ams_seed*.npz"))
+    pr_files = list(results_dir.rglob("pr_ams*.npz"))
     if pr_files:
         curves: dict[str, tuple[np.ndarray, np.ndarray]] = {}
         for path in sorted(pr_files):

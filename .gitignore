@@ -21,9 +21,20 @@ data/raw/**/*.emb
 data/raw/**/*.emb.txt
 *.emb
 
-# run artifacts
-results/
+# run artifacts: keep tables, summaries, and PR curves
+results/*
 !results/.gitkeep
+!results/DTI/
+!results/DTI/**
+!results/DDI/
+!results/DDI/**
+!results/PPI/
+!results/PPI/**
+!results/GDI/
+!results/GDI/**
+!results/*.csv
+!results/*.json
+results/**/*.zip
 checkpoints/
 *.pt
 *.pth

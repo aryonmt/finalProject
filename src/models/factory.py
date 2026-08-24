@@ -26,7 +26,7 @@ def build_model(
     key = name.lower()
     if key in {"gcn", "standard_gcn", "baseline_gcn"}:
         return StandardGCN(**kwargs)
-    if key in {"skipgnn", "skipgnn_baseline", "baseline"}:
+    if key in {"skipgnn", "skipgnn", "skipgnn_baseline", "baseline"}:
         return SkipGNNBaseline(**kwargs)
     if key in {"ams", "ams_skipgnn", "ams-skipgnn"}:
         return AMSSkipGNN(**kwargs)

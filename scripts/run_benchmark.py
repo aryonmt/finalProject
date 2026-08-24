@@ -51,17 +51,47 @@ def _jsonify(obj):
 
 def run_heuristics(bundle, seed: int) -> dict:
     set_seed(seed)
-    scores = compute_heuristic_scores(
+    from sklearn.metrics import average_precision_score, roc_auc_score
+
+    from src.data.samplers import generate_bipartite_aware_hard_negatives
+
+    scores_uniform = compute_heuristic_scores(
         bundle.adj_train,
         bundle.test.pairs,
         method="resource_allocation",
         bipartite=bundle.bipartite,
     )
-    from sklearn.metrics import average_precision_score, roc_auc_score
+    uniform_auroc = float(roc_auc_score(bundle.test.labels, scores_uniform))
+    uniform_auprc = float(average_precision_score(bundle.test.labels, scores_uniform))
 
+    pos_test = bundle.test.pairs[bundle.test.labels >= 0.5]
+    hard_neg = generate_bipartite_aware_hard_negatives(
+        pos_test,
+        bundle.adj_train,
+        bundle.known_positives,
+        bundle.bipartite,
+        bundle.n_source,
+        bundle.n_target,
+        seed=seed,
+    )
+    hard_pairs = np.concatenate([pos_test, hard_neg], axis=0)
+    hard_labels = np.concatenate(
+        [
+            np.ones(len(pos_test), dtype=np.int32),
+            np.zeros(len(hard_neg), dtype=np.int32),
+        ]
+    )
+    scores_hard = compute_heuristic_scores(
+        bundle.adj_train,
+        hard_pairs,
+        method="resource_allocation",
+        bipartite=bundle.bipartite,
+    )
     return {
-        "auroc": float(roc_auc_score(bundle.test.labels, scores)),
-        "auprc": float(average_precision_score(bundle.test.labels, scores)),
+        "uniform_auroc": uniform_auroc,
+        "uniform_auprc": uniform_auprc,
+        "hard_auroc": float(roc_auc_score(hard_labels, scores_hard)),
+        "hard_auprc": float(average_precision_score(hard_labels, scores_hard)),
         "method": "resource_allocation",
     }
 
@@ -103,7 +133,11 @@ def main() -> int:
                 h.update({"model": "heuristic", "seed": seed, "dataset": args.dataset})
                 payload["runs"].append(h)
                 rows.append(h)
-                print(f"heuristic seed={seed} auprc={h['auprc']:.4f}", flush=True)
+                print(
+                    f"heuristic seed={seed} uniform_auprc={h['uniform_auprc']:.4f} "
+                    f"hard_auprc={h['hard_auprc']:.4f}",
+                    flush=True,
+                )
             continue
         for seed in seeds:
             print(f"=== {model_name} seed={seed} ===", flush=True)
