@@ -132,6 +132,7 @@ def main() -> int:
     p.add_argument("--models", nargs="+", default=["gcn", "skipgnn", "ams", "heuristic"])
     p.add_argument("--seeds", nargs="+", type=int, default=None)
     p.add_argument("--epochs", type=int, default=None)
+    p.add_argument("--batch-size", type=int, default=None)
     p.add_argument("--quick", action="store_true")
     p.add_argument("--device", default="auto")
     p.add_argument("--input-type", default="one_hot")
@@ -142,9 +143,14 @@ def main() -> int:
 
     cfg = load_cfg(args.dataset)
     epochs = args.epochs or (2 if args.quick else int(cfg.get("epochs", 30)))
+    batch_size = args.batch_size or int(cfg.get("batch_size", 128))
     seeds = args.seeds or ([42] if args.quick else list(cfg.get("seeds_stage1", [42, 123, 7])))
     device = device_of(args.device)
-    print(f"dataset={args.dataset} device={device} epochs={epochs} seeds={seeds} models={args.models}", flush=True)
+    print(
+        f"dataset={args.dataset} device={device} epochs={epochs} "
+        f"batch_size={batch_size} seeds={seeds} models={args.models}",
+        flush=True,
+    )
 
     bundle = load_dataset_splits(args.dataset, input_type=args.input_type, device=device)
     print(
@@ -185,7 +191,7 @@ def main() -> int:
                 model,
                 bundle,
                 epochs=epochs,
-                batch_size=int(cfg.get("batch_size", 128)),
+                batch_size=batch_size,
                 lr=float(cfg.get("lr", 1e-3)),
                 weight_decay=float(cfg.get("weight_decay", 5e-4)),
                 patience=int(cfg.get("patience", 8)),
