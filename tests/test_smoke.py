@@ -232,3 +232,24 @@ def test_extract_node_embeddings_shape():
     emb = extract_node_embeddings(model, bundle)
     assert emb.shape[0] == n
     assert np.isfinite(emb).all()
+
+
+def test_chunked_gat_matches_large_chunk():
+    from src.models.skip_gat import _ChunkedSparseGATv2
+
+    torch.manual_seed(0)
+    n_nodes, heads, d_k = 20, 2, 4
+    n_edges = 80
+    h_src = torch.randn(n_nodes, heads, d_k, requires_grad=True)
+    h_dst = torch.randn(n_nodes, heads, d_k, requires_grad=True)
+    attn = torch.randn(heads, d_k, requires_grad=True)
+    u = torch.randint(0, n_nodes, (n_edges,))
+    v = torch.randint(0, n_nodes, (n_edges,))
+    kwargs = dict(negative_slope=0.2, dropout=0.0, training=False)
+    out_a = _ChunkedSparseGATv2.apply(h_src, h_dst, attn, u, v, 0.2, 0.0, False, 7)
+    out_b = _ChunkedSparseGATv2.apply(h_src, h_dst, attn, u, v, 0.2, 0.0, False, 10_000)
+    assert torch.allclose(out_a, out_b, atol=1e-5, rtol=1e-5)
+    out_a.sum().backward()
+    assert torch.isfinite(h_src.grad).all()
+    assert torch.isfinite(h_dst.grad).all()
+    assert torch.isfinite(attn.grad).all()
