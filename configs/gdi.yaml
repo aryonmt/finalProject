@@ -4,4 +4,4 @@ input_type: one_hot
 hidden_dim: 64
 epochs: 20
 patience: 6
-batch_size: 2048        # decoder minibatches; encoder runs once per epoch
+batch_size: 256

@@ -152,9 +152,9 @@ def main() -> int:
     p.add_argument("--save-embeddings", action="store_true")
     p.add_argument("--save-checkpoints", action="store_true")
     p.add_argument(
-        "--encode-every-batch",
+        "--encode-once",
         action="store_true",
-        help="Old (slow) loop: re-encode the full graph on every decoder batch.",
+        help="Speed hack: one encoder Adam step per epoch. Underfits vs AMS. Default is encode every batch.",
     )
     args = p.parse_args()
     if args.out is None:
@@ -173,7 +173,7 @@ def main() -> int:
     print(
         f"dataset={args.dataset} device={device} epochs={epochs} "
         f"batch_size={batch_size} seeds={seeds} models={args.models} "
-        f"encode_once={not args.encode_every_batch}",
+        f"encode_once={args.encode_once}",
         flush=True,
     )
 
@@ -222,7 +222,7 @@ def main() -> int:
                 patience=int(cfg.get("patience", 8)),
                 grad_clip=float(cfg.get("grad_clip", 5.0)),
                 seed=seed,
-                encode_once=not args.encode_every_batch,
+                encode_once=bool(args.encode_once),
             )
             rec = {
                 "dataset": args.dataset,

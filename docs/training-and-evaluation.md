@@ -12,7 +12,7 @@
 6. Restore the best state. Build the hard negative bank from **test positives** + train-graph sampling.
 7. Score val, uniform test, and hard test. Fit `τ*` on val F1 only.
 
-The encoder is invoked **once per epoch** by default (`encode_once=True`). The decoder still minibatches. That matters on GDI: SkipGATv2 over the skip graph used to be re-run on every decoder batch (~15 min/epoch). Pass `--encode-every-batch` only if you need the old loop.
+The encoder is invoked **once per decoder batch** by default (same protocol as AMS). That is what the GDI extra-model numbers need: `encode_once` is only a speed flag and gives one Adam step per epoch, which underfits. Eval still encodes once (`predict_probs`).
 
 ## Hyperparameters
 
@@ -23,7 +23,7 @@ Reported Kaggle runs used hidden 64, dropout 0.5, Adam `1e-3`, weight decay `5e-
 | Dataset | epochs | patience | batch_size (baselines) | Extra-model batch (Kaggle) |
 | --- | --- | --- | --- | --- |
 | DTI / DDI / PPI | 30 | 8 | 128 | 1024 (DDI/PPI extras) |
-| GDI | **20** (`configs/gdi.yaml`) | **6** | **2048** | 2048 |
+| GDI | **20** (`configs/gdi.yaml`) | **6** | **256** | 1024 (extras, per-batch encode) |
 
 `--quick` is a wiring check (2 epochs, seed 42) and writes under `results/temp/` so it cannot clobber paper CSVs.
 
@@ -53,4 +53,4 @@ python scripts/run_benchmark.py --dataset DTI --models gcn skipgnn ams \
     --seeds 42 123 7 --device auto --save-embeddings --save-checkpoints
 ```
 
-`--save-embeddings` writes gitignored `embeddings_<model>_seed<seed>.npz` for t-SNE. `--save-checkpoints` writes `results/<DS>/checkpoints/` (also gitignored).
+`--save-embeddings` writes gitignored `embeddings_<model>_seed<seed>.npz` for t-SNE. `--save-checkpoints` writes `results/<DS>/checkpoints/` (also gitignored). `--encode-once` encodes the graph once per epoch (one Adam step); keep it off for paper GDI extras.

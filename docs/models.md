@@ -41,7 +41,7 @@ Not a neural net. Homogeneous graphs: one-hop RA. Bipartite graphs: 3-walk RA (`
 
 ## `gat` — `SkipGATv2`
 
-Same gated original/skip skeleton as AMS, but each graph convolution is sparse GATv2. Attention is **chunked** (`_ChunkedSparseGATv2`) so peak memory is O(chunk) rather than O(E). Chunk size: env `GAT_EDGE_CHUNK` (default `131072`). Needed because the GDI skip graph has millions of edges.
+Same gated original/skip skeleton as AMS, but each graph convolution is sparse GATv2. Attention is vectorized when `(E, heads, d_k)` fits in ~384MB (`GAT_VECTORIZED_MAX_BYTES`); otherwise chunked (`GAT_EDGE_CHUNK`, default `1048576`). Needed because the GDI skip graph has millions of edges.
 
 `skip_kind = "weighted"`.
 

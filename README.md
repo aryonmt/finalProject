@@ -97,7 +97,7 @@ python scripts/run_benchmark.py --dataset DDI --quick --device cpu
 | DTI | 3 seeds, uniform + hard | 3 seeds, uniform + hard |
 | DDI | 3 seeds, uniform + hard | 3 seeds, uniform + hard |
 | PPI | 3 seeds, uniform + hard | 3 seeds, uniform + hard |
-| GDI | 3 seeds, uniform + hard | **not trained** (skip graph is huge; T4 GAT is ~15 min/epoch) |
+| GDI | 3 seeds, uniform + hard | **re-run pending** (do not quote the encode-once extras; Stage 5 on current `main` uses per-batch encode) |
 
 Ablation and missing-edge robustness are reported on **DTI**.
 

@@ -36,7 +36,7 @@ Uniform AUPRC is much closer across neural models (often > 0.91). The hard bank 
 
 ## Known gap
 
-**GDI has no `gat` / `3hop` / `contrastive` rows.** The GDI skip graph is on the order of 20k nodes with millions of skip edges. Chunked GAT fits in T4 memory but costs ~15 minutes per epoch at batch 256. Stage 4 finished DDI and PPI extra models; GDI GAT was cancelled to keep those CSVs. Do not invent numbers for the missing cells.
+**GDI has no fair `gat` / `3hop` / `contrastive` rows in git.** An encode-once Kaggle run produced extra-model numbers (GAT hard AUPRC ~0.66) that are **not comparable** to AMS: that trainer did one Adam step per epoch instead of one step per decoder batch. Re-run Stage 5 from current `main` (per-batch encode, batch 1024) before filling these cells. Do not import those underfit rows.
 
 ## How to quote a number
 

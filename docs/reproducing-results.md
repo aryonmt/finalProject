@@ -42,16 +42,16 @@ Expected wall-clock (order of magnitude, T4):
 
 - DTI / DDI GCN–AMS: hours, not days
 - Extra models on DDI/PPI at batch 1024: several hours
-- GDI GAT: ~15 minutes **per epoch** at batch 256; that is why GDI extra models are missing
+- GDI extras (`gat` / `3hop` / `contrastive`): Kaggle Stage 5, batch 1024, **per-batch encode** (same protocol as AMS). Do not quote the encode-once GDI extras run (one Adam step per epoch; GAT hard AUPRC ~0.66).
 
-To fill the GDI gap only:
+To fill the GDI gap only (GPU):
 
 ```bash
 python scripts/run_benchmark.py --dataset GDI --models gat 3hop contrastive \
-    --seeds 42 123 7 --batch-size 256 --save-embeddings
+    --seeds 42 123 7 --batch-size 1024 --save-embeddings
 ```
 
-Run that on a GPU with enough time (or resume from a previous Kaggle output via **Add Input → Notebook Output Files** as documented in the runner notebook).
+Do **not** pass `--encode-once`. That flag is a speed hack and underfits vs AMS.
 
 ## What must stay identical
 

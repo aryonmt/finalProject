@@ -103,17 +103,16 @@ def train_one_model(
     grad_clip: float = 5.0,
     seed: int = 42,
     log_fn: Callable[[str], None] | None = None,
-    encode_once: bool = True,
+    encode_once: bool = False,
 ) -> dict[str, Any]:
     """Train with BCE (+ optional contrastive term), early-stop on val AUPRC.
 
     After restoring the best checkpoint, scores the official uniform test split
     and a hard negative bank sampled from the train graph only.
 
-    `encode_once=True` (default) runs the GNN encoder once per epoch, then
-    minibatches only the decoder. That is required for GDI-scale skip graphs:
-    encoding every decoder batch repeats a multi-million-edge GAT hundreds of
-    times per epoch.
+    Default matches AMS/SkipGNN: encode the graph on every decoder batch so
+    Adam sees one step per minibatch. `encode_once=True` is a speed hack
+    (one encoder step per epoch) and underfits GDI-scale models.
     """
     set_seed(seed)
     device = bundle.features.device
@@ -142,6 +141,8 @@ def train_one_model(
             opt.zero_grad(set_to_none=True)
             t0 = time.perf_counter()
             emb, h_o2, h_s2 = _encode_outputs(model, bundle, skip)
+            if device.type == "cuda":
+                torch.cuda.synchronize()
             t_enc = time.perf_counter() - t0
             batch_losses: list[torch.Tensor] = []
             for pairs, labels in loader:

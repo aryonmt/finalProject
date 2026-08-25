@@ -14,7 +14,7 @@ Settings:
 
 The notebook clones `https://github.com/aryonmt/finalProject.git` branch `main` (override with env `REPO_BRANCH`), `pip install -e .`, then runs `scripts/run_benchmark.py` as subprocesses.
 
-Default **`STAGE=5`** trains GDI `gat` / `3hop` / `contrastive` only (skips a model if three seeds already exist). The trainer encodes the graph **once per epoch** and minibatches only the decoder — that is what makes GDI GAT feasible on a T4 (the old per-batch encode was ~15 min/epoch).
+Default **`STAGE=5`** retrains GDI `gat` / `3hop` / `contrastive` with **per-batch encode** (same optimizer protocol as AMS). Do not keep the encode-once rows (GAT hard AUPRC ~0.66); those were underfit.
 
 `STAGE=4` is DDI/PPI extras (already in git).
 
@@ -29,7 +29,7 @@ Earlier versions of the notebook used a `STAGE` env var:
 | 2 | PPI + GDI baselines + DTI ablation/robustness |
 | 3 | DTI extra models (`gat`, `3hop`, `contrastive`) + t-SNE |
 | 4 | Extra models on DDI + PPI |
-| 5 (default) | Extra models on **GDI** (encode-once trainer) |
+| 5 (default) | Extra models on **GDI** (per-batch encode, same protocol as AMS) |
 
 Executed archives of stages 1–3 live under `notebooks/executed/`. They are a log of what ran, not the upload target.
 
@@ -38,7 +38,7 @@ The current runner defaults to `STAGE=5` (GDI extras). DDI/PPI extras are alread
 ## Batch sizes used on T4
 
 - DDI / PPI extra models: `--batch-size 1024`
-- GDI extra models: `--batch-size 2048` (decoder only)
+- GDI extra models: `--batch-size 1024`, encode every decoder batch (not the one-step-per-epoch speed hack)
 - Skip-graph GAT: vectorized when `(E, heads, d_k)` fits in ~384MB, otherwise chunked (`GAT_EDGE_CHUNK` default 1,048,576)
 
 Models run **one subprocess at a time** so a crash does not lose earlier CSVs.
@@ -49,7 +49,7 @@ If a version dies mid-GDI:
 
 1. Start a new notebook from the latest `kaggle_runner.ipynb` on GitHub.
 2. **Add Input → Notebook Output Files** → the failed version.
-3. Save & Run All. The ingest cell copies `results/` from that output and skips finished seeds.
+3. Save & Run All. Stage 5 retrains GDI extras by default so encode-once rows are overwritten. Set `SKIP_COMPLETE=1` only when resuming a **fair** (per-batch) mid-run.
 
 ## Bring artifacts home
 
