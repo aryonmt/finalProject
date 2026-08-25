@@ -13,7 +13,7 @@ Every path below is relative to the repo root. Names on disk are the source of t
 | `results/` | Cached metrics. Commit CSVs, JSON summaries, AMS PR `.npz`. Not embeddings or checkpoints. |
 | `figures/` | 300 DPI PNGs. Regenerated from `results/` by `scripts/make_figures.py`. |
 | `notebooks/` | Kaggle runner plus archived executed stage notebooks. |
-| `docs/` | How the pieces work. Spec files used while writing code were removed. |
+| `docs/` | How the pieces work, including [training-protocol.md](training-protocol.md). |
 | `tests/` | CPU unit tests. `pytest -q`. |
 | `pyproject.toml` | Package metadata and runtime dependencies. |
 | `environment.yml` | Conda env that pip-installs the package. |

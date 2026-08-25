@@ -4,4 +4,4 @@
 
 Keys: `hidden_dim`, `decoder_hidden`, `dropout`, `lr`, `weight_decay`, `batch_size`, `epochs`, `patience`, `grad_clip`, `input_type`, `seeds_stage1`.
 
-Kaggle extra-model runs pass `--batch-size` on the CLI (1024 for DDI/PPI, 256 for GDI) and do not require editing YAML.
+Kaggle extra-model runs pass `--batch-size` on the CLI (1024 for DDI, PPI, and GDI extras). GDI *baselines* stay at YAML batch 256. See [docs/training-protocol.md](../docs/training-protocol.md).

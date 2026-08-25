@@ -17,7 +17,8 @@ Remote: [https://github.com/aryonmt/finalProject.git](https://github.com/aryonmt
 | Leak-free data and skip graphs | [docs/data-and-sampling.md](docs/data-and-sampling.md) |
 | Model math and CLI names | [docs/models.md](docs/models.md) |
 | Trainer, metrics, dual banks | [docs/training-and-evaluation.md](docs/training-and-evaluation.md) |
-| Cached tables and coverage gaps | [docs/results.md](docs/results.md) |
+| What ran, batch sizes, valid comparisons | [docs/training-protocol.md](docs/training-protocol.md) |
+| Cached tables | [docs/results.md](docs/results.md) |
 | Figure catalogue | [docs/figures.md](docs/figures.md) |
 | Kaggle T4 runner | [docs/kaggle.md](docs/kaggle.md) |
 | End-to-end reproduction | [docs/reproducing-results.md](docs/reproducing-results.md) |
@@ -97,7 +98,7 @@ python scripts/run_benchmark.py --dataset DDI --quick --device cpu
 | DTI | 3 seeds, uniform + hard | 3 seeds, uniform + hard |
 | DDI | 3 seeds, uniform + hard | 3 seeds, uniform + hard |
 | PPI | 3 seeds, uniform + hard | 3 seeds, uniform + hard |
-| GDI | 3 seeds, uniform + hard | **re-run pending** (do not quote the encode-once extras; Stage 5 on current `main` uses per-batch encode) |
+| GDI | 3 seeds, uniform + hard | 3 seeds, uniform + hard |
 
 Ablation and missing-edge robustness are reported on **DTI**.
 

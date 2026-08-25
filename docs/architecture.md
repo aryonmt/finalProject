@@ -42,4 +42,4 @@ data/raw/<DS>/*.csv
 
 ## Kaggle vs laptop
 
-The Kaggle notebook is **not** a second codebase. It clones this repo and calls the same scripts. The laptop is for `pytest`, figure regen, and importing the zip. See [kaggle.md](kaggle.md).
+The Kaggle notebook is **not** a second codebase. It clones this repo and calls the same scripts. The laptop is for `pytest`, figure regen, and importing the zip. See [kaggle.md](kaggle.md). Which runs are comparable: [training-protocol.md](training-protocol.md).

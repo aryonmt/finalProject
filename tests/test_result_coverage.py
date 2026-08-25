@@ -37,8 +37,7 @@ def test_paper_tables_have_expected_coverage() -> None:
 
     gdi = RESULTS / "GDI" / "benchmark.csv"
     models = _models(gdi)
-    for name in BASELINES:
-        assert name in models
-        assert SEEDS <= _seeds_for(gdi, name)
-    assert not set(EXTRAS) & models
+    for name in BASELINES + EXTRAS:
+        assert name in models, f"GDI missing {name}"
+        assert SEEDS <= _seeds_for(gdi, name), f"GDI {name} seeds"
     assert (RESULTS / "GDI" / "pr_ams_seed42.npz").exists()

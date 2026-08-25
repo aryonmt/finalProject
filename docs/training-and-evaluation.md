@@ -12,7 +12,7 @@
 6. Restore the best state. Build the hard negative bank from **test positives** + train-graph sampling.
 7. Score val, uniform test, and hard test. Fit `τ*` on val F1 only.
 
-The encoder is invoked **once per decoder batch** by default (same protocol as AMS). That is what the GDI extra-model numbers need: `encode_once` is only a speed flag and gives one Adam step per epoch, which underfits. Eval still encodes once (`predict_probs`).
+The encoder is invoked **once per decoder batch** by default (same protocol as AMS). `--encode-once` is a speed flag and underfits. What actually ran, and which comparisons are valid: [training-protocol.md](training-protocol.md). Eval still encodes once (`predict_probs`).
 
 ## Hyperparameters
 

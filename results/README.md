@@ -18,4 +18,4 @@ from the repo root. Do not hand-edit numbers.
 | `*/checkpoints/` | no |
 | `temp/`, `*.zip` | no |
 
-**GDI** has no `gat` / `3hop` / `contrastive` rows. That is a coverage gap, not a dropped file. See [docs/results.md](../docs/results.md).
+**Coverage:** all four datasets have seven models × three seeds. Protocol: [docs/training-protocol.md](../docs/training-protocol.md).

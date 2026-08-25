@@ -2,6 +2,8 @@
 
 Full training is designed for a **Kaggle Notebook with a T4 GPU**.
 
+Paper tables for all four datasets × seven models are already in git. Upload the runner only if you need to retrain.
+
 ## Upload
 
 File: [`notebooks/kaggle_runner.ipynb`](../notebooks/kaggle_runner.ipynb)
@@ -14,42 +16,40 @@ Settings:
 
 The notebook clones `https://github.com/aryonmt/finalProject.git` branch `main` (override with env `REPO_BRANCH`), `pip install -e .`, then runs `scripts/run_benchmark.py` as subprocesses.
 
-Default **`STAGE=5`** retrains GDI `gat` / `3hop` / `contrastive` with **per-batch encode** (same optimizer protocol as AMS). Do not keep the encode-once rows (GAT hard AUPRC ~0.66); those were underfit.
+Default **`STAGE=0`** is a DTI `--quick` smoke so a Save & Run All cannot accidentally retrain GDI for hours. Set `STAGE=5` only to redo GDI extras.
 
-`STAGE=4` is DDI/PPI extras (already in git).
+Protocol and validity: [training-protocol.md](training-protocol.md).
 
 ## Stages (historical)
 
-Earlier versions of the notebook used a `STAGE` env var:
-
 | STAGE | What it trained |
 | --- | --- |
-| 0 | DTI `--quick` smoke |
+| 0 (default) | DTI `--quick` smoke |
 | 1 | DTI + DDI: GCN, SkipGNN, AMS, heuristic |
 | 2 | PPI + GDI baselines + DTI ablation/robustness |
 | 3 | DTI extra models (`gat`, `3hop`, `contrastive`) + t-SNE |
 | 4 | Extra models on DDI + PPI |
-| 5 (default) | Extra models on **GDI** (per-batch encode, same protocol as AMS) |
+| 5 | Extra models on **GDI** (per-batch encode, same protocol as AMS) |
 
-Executed archives of stages 1–3 live under `notebooks/executed/`. They are a log of what ran, not the upload target.
+Executed archives live under `notebooks/executed/` (`stage1` … `stage5_gdi_extras`). They are a log of what ran, not the upload target.
 
-The current runner defaults to `STAGE=5` (GDI extras). DDI/PPI extras are already complete.
+This notebook **implements** stages 0, 4, and 5 only. Stages 1–3 are historical; setting `STAGE` to those values will not replay them.
 
 ## Batch sizes used on T4
 
 - DDI / PPI extra models: `--batch-size 1024`
-- GDI extra models: `--batch-size 1024`, encode every decoder batch (not the one-step-per-epoch speed hack)
+- GDI extra models: `--batch-size 1024`, encode every decoder batch
 - Skip-graph GAT: vectorized when `(E, heads, d_k)` fits in ~384MB, otherwise chunked (`GAT_EDGE_CHUNK` default 1,048,576)
 
 Models run **one subprocess at a time** so a crash does not lose earlier CSVs.
 
 ## Resume
 
-If a version dies mid-GDI:
+If a version dies mid-run:
 
 1. Start a new notebook from the latest `kaggle_runner.ipynb` on GitHub.
 2. **Add Input → Notebook Output Files** → the failed version.
-3. Save & Run All. Stage 5 retrains GDI extras by default so encode-once rows are overwritten. Set `SKIP_COMPLETE=1` only when resuming a **fair** (per-batch) mid-run.
+3. Set `STAGE` to `4` or `5` only. Unknown values fall back to smoke. For Stage 5, set `SKIP_COMPLETE=1` only when resuming a **fair** (per-batch) mid-run.
 
 ## Bring artifacts home
 

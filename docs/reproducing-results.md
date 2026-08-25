@@ -42,16 +42,16 @@ Expected wall-clock (order of magnitude, T4):
 
 - DTI / DDI GCN–AMS: hours, not days
 - Extra models on DDI/PPI at batch 1024: several hours
-- GDI extras (`gat` / `3hop` / `contrastive`): Kaggle Stage 5, batch 1024, **per-batch encode** (same protocol as AMS). Do not quote the encode-once GDI extras run (one Adam step per epoch; GAT hard AUPRC ~0.66).
+- GDI extras: Stage 5, batch 1024, per-batch encode. Already in git. Protocol: [training-protocol.md](training-protocol.md).
 
-To fill the GDI gap only (GPU):
+Retrain GDI extras only if you must:
 
 ```bash
 python scripts/run_benchmark.py --dataset GDI --models gat 3hop contrastive \
     --seeds 42 123 7 --batch-size 1024 --save-embeddings
 ```
 
-Do **not** pass `--encode-once`. That flag is a speed hack and underfits vs AMS.
+Do **not** pass `--encode-once`.
 
 ## What must stay identical
 

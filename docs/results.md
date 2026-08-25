@@ -1,17 +1,17 @@
 # Results tables
 
-Canonical numbers are the CSVs in git, not screenshots.
+Canonical numbers are the CSVs in git, not screenshots. Protocol and validity: [training-protocol.md](training-protocol.md).
 
 ## Files
 
 | Path | Contents |
 | --- | --- |
-| `results/DTI/benchmark.csv` | All models × 3 seeds (including extra architectures) |
-| `results/DDI/benchmark.csv` | Same |
-| `results/PPI/benchmark.csv` | Same |
-| `results/GDI/benchmark.csv` | GCN, SkipGNN, AMS, heuristic only |
+| `results/DTI/benchmark.csv` | All 7 models × 3 seeds |
+| `results/DDI/benchmark.csv` | All 7 models × 3 seeds |
+| `results/PPI/benchmark.csv` | All 7 models × 3 seeds |
+| `results/GDI/benchmark.csv` | All 7 models × 3 seeds |
 | `results/*/summary.json` | Per-run histories (learning curves) plus metrics |
-| `results/*/pr_ams_seed{42,123,7}.npz` | AMS precision–recall arrays |
+| `results/*/pr_ams_seed{42,123,7}.npz` | AMS precision–recall arrays (seed 42 used in fig4) |
 | `results/ablation.csv` | DTI AMS ladder |
 | `results/robustness.csv` | DTI missing-edge sweep |
 | `results/model_comparison.csv` | Mean over seeds (rewritten by `make_figures.py`) |
@@ -28,15 +28,13 @@ Rounded from `model_comparison.csv` after figure generation. Prefer the CSV for 
 | SkipGNN | 0.695 | 0.724 | 0.622 | 0.720 |
 | AMS | 0.798 | 0.912 | 0.674 | 0.829 |
 | Heuristic | 0.776 | 0.672 | 0.578 | **0.842** |
-| SkipGATv2 | **0.804** | 0.900 | **0.779** | — |
-| 3-hop | 0.803 | 0.895 | 0.688 | — |
-| Contrastive | 0.800 | 0.905 | 0.657 | — |
+| SkipGATv2 | **0.804** | 0.900 | **0.778** | 0.837 |
+| 3-hop | 0.803 | 0.895 | 0.688 | 0.832 |
+| Contrastive | 0.800 | 0.905 | 0.657 | 0.833 |
 
-Uniform AUPRC is much closer across neural models (often > 0.91). The hard bank is where skip-graph design shows up: AMS lifts DTI/DDI/GDI over SkipGNN; SkipGATv2 leads PPI hard AUPRC; the bipartite 3-walk heuristic is strongest on GDI hard.
+Uniform AUPRC is much closer across neural models (often > 0.91). The hard bank is where skip-graph design shows up: AMS lifts DTI/DDI over SkipGNN; SkipGATv2 leads PPI hard AUPRC; on GDI the bipartite 3-walk heuristic is still strongest, with SkipGATv2 / 3-hop / contrastive in the AMS band after the per-batch re-run.
 
-## Known gap
-
-**GDI has no fair `gat` / `3hop` / `contrastive` rows in git.** An encode-once Kaggle run produced extra-model numbers (GAT hard AUPRC ~0.66) that are **not comparable** to AMS: that trainer did one Adam step per epoch instead of one step per decoder batch. Re-run Stage 5 from current `main` (per-batch encode, batch 1024) before filling these cells. Do not import those underfit rows.
+GDI extras in git are the Stage 5 **per-batch encode** job (batch 1024). Do not mix them with the discarded encode-once zip.
 
 ## How to quote a number
 

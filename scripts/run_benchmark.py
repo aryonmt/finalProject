@@ -243,9 +243,8 @@ def main() -> int:
                 f"hard_auprc={rec['hard_auprc']:.4f}",
                 flush=True,
             )
-            if model_name == "ams":
-                prec, rec_arr = pr_arrays(bundle.test.labels, metrics["test_probs"])
-                np.savez(out_dir / f"pr_ams_seed{seed}.npz", prec=prec, rec=rec_arr)
+            prec, rec_arr = pr_arrays(bundle.test.labels, metrics["test_probs"])
+            np.savez(out_dir / f"pr_{model_name}_seed{seed}.npz", prec=prec, rec=rec_arr)
             if args.save_embeddings:
                 emb = extract_node_embeddings(model, bundle)
                 np.savez_compressed(

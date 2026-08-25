@@ -1,9 +1,8 @@
 """Paper figures from cached `results/` tables.
 
-All comparison plots use a fixed dataset order (DTI, DDI, PPI, GDI) and a
-fixed model order so bars do not jump when a dataset is missing a model.
-Seed-level rows drive error bars (`errorbar="sd"`). GDI has no SkipGATv2 /
-3-hop / contrastive numbers in this delivery; those groups are simply absent.
+Comparison plots use a fixed dataset order (DTI, DDI, PPI, GDI) and a fixed
+seven-model order. Seed-level rows drive error bars (`errorbar="sd"`).
+Missing model×dataset cells are omitted, never drawn as zero.
 """
 
 from __future__ import annotations
@@ -20,13 +19,6 @@ from sklearn.metrics import precision_recall_curve
 
 DATASET_ORDER = ("DTI", "DDI", "PPI", "GDI")
 MODEL_ORDER = ("gcn", "skipgnn", "ams", "heuristic", "gat", "3hop", "contrastive")
-
-PALETTE = {
-    "SkipGNN Uniform": "#5B8DB8",
-    "AMS Uniform": "#1F4E79",
-    "SkipGNN Hard": "#E09A3E",
-    "AMS Hard": "#9A3B12",
-}
 
 MODEL_PALETTE = {
     "gcn": "#6E6E6E",
@@ -52,10 +44,7 @@ LABEL_PALETTE = {MODEL_LABELS[k]: v for k, v in MODEL_PALETTE.items()}
 LABEL_ORDER = [MODEL_LABELS[k] for k in MODEL_ORDER]
 
 _SKIP_RESULT_PARTS = {"temp", "_kaggle_bundle_staging", ".git"}
-GDI_COVERAGE_NOTE = (
-    "Error bars: SD across seeds 42 / 123 / 7. "
-    "GDI has no SkipGATv2, 3-hop, or contrastive runs in this release."
-)
+SEED_NOTE = "Error bars: SD across seeds 42 / 123 / 7."
 ABLATION_LABELS = {
     "0_skipgnn": "0. SkipGNN",
     "1_weighted": "1. Weighted skip",
@@ -117,27 +106,6 @@ def _footnote(fig: plt.Figure, text: str) -> None:
     fig.text(0.5, -0.03, text, ha="center", fontsize=8, color="#4a4a4a")
 
 
-def plot_uniform_vs_hard(df: pd.DataFrame, out_path: Path) -> None:
-    fig, ax = plt.subplots(figsize=(8.2, 4.6))
-    hue_order = [k for k in PALETTE if k in set(df["series"])]
-    sns.barplot(
-        data=df,
-        x="dataset",
-        y="auprc",
-        hue="series",
-        order=list(DATASET_ORDER),
-        hue_order=hue_order,
-        palette=PALETTE,
-        errorbar="sd",
-        capsize=0.06,
-        ax=ax,
-    )
-    ax.set_title("SkipGNN vs AMS — uniform and hard AUPRC")
-    _finish(ax, "AUPRC")
-    fig.savefig(out_path)
-    plt.close(fig)
-
-
 def plot_ablation_ladder(df: pd.DataFrame, out_path: Path) -> None:
     plot_df = df.copy()
     plot_df["step_label"] = plot_df["step"].map(lambda s: ABLATION_LABELS.get(str(s), str(s)))
@@ -195,24 +163,43 @@ def plot_robustness(df: pd.DataFrame, out_path: Path) -> None:
 
 
 def plot_pr_grid(
-    curves: dict[str, tuple[np.ndarray, np.ndarray]],
+    curves: dict[str, dict[str, tuple[np.ndarray, np.ndarray]]],
     out_path: Path,
 ) -> None:
+    """One panel per dataset; overlay every model that has a seed-42 PR array."""
     names = [d for d in DATASET_ORDER if d in curves] or list(curves.keys())
-    fig, axes = plt.subplots(2, 2, figsize=(8.2, 8.2))
+    fig, axes = plt.subplots(2, 2, figsize=(8.6, 8.6))
     for ax, name in zip(axes.ravel(), names):
-        prec, rec = curves[name]
-        ax.plot(rec, prec, color="#1F4E79", linewidth=1.8)
-        ax.set_title(f"AMS — {name}")
+        model_curves = curves.get(name, {})
+        for key in MODEL_ORDER:
+            if key not in model_curves:
+                continue
+            prec, rec = model_curves[key]
+            ax.plot(
+                rec,
+                prec,
+                color=MODEL_PALETTE.get(key),
+                linewidth=1.5,
+                label=MODEL_LABELS.get(key, key),
+            )
+        ax.set_title(name)
         ax.set_xlabel("Recall")
         ax.set_ylabel("Precision")
         ax.set_xlim(0, 1)
         ax.set_ylim(0, 1)
         ax.grid(linestyle=":", linewidth=0.5, alpha=0.6)
+        ax.legend(frameon=False, fontsize=7, loc="lower left")
     for ax in axes.ravel()[len(names) :]:
         ax.axis("off")
-    fig.suptitle("Precision–recall (AMS, seed 42)", y=1.01)
+    fig.suptitle("Precision–recall on the uniform test split (seed 42)", y=1.01)
     fig.tight_layout()
+    n_models = max((len(v) for v in curves.values()), default=0)
+    if n_models < len(MODEL_ORDER):
+        _footnote(
+            fig,
+            "Curves are drawn for every stored pr_<model>_seed42.npz. "
+            "Older runs saved AMS only; AUPRC for all seven models is in fig1.",
+        )
     fig.savefig(out_path)
     plt.close(fig)
 
@@ -298,30 +285,52 @@ def plot_all_models_uniform_hard(df: pd.DataFrame, out_path: Path) -> None:
             ax.legend(frameon=False, fontsize=8, ncol=2, loc="lower right")
     fig.suptitle("All models — mean ± SD over seeds", y=1.03)
     fig.tight_layout()
-    _footnote(fig, GDI_COVERAGE_NOTE)
+    _footnote(fig, SEED_NOTE)
     fig.savefig(out_path)
     plt.close(fig)
 
 
 def plot_delta_hard_auprc(df: pd.DataFrame, out_path: Path) -> None:
+    """Hard AUPRC of every model minus AMS on that dataset (AMS = 0)."""
     rows = []
     for dataset in DATASET_ORDER:
         group = df[df["dataset"] == dataset]
-        skip_h = _metric_mean(group[group["model"].map(_model_key) == "skipgnn"], "hard_auprc")
         ams_h = _metric_mean(group[group["model"].map(_model_key) == "ams"], "hard_auprc")
-        if skip_h is None or ams_h is None:
+        if ams_h is None:
             continue
-        rows.append({"dataset": dataset, "delta": ams_h - skip_h})
+        for key in MODEL_ORDER:
+            if key == "ams":
+                continue
+            val = _metric_mean(group[group["model"].map(_model_key) == key], "hard_auprc")
+            if val is None:
+                continue
+            rows.append(
+                {
+                    "dataset": dataset,
+                    "model": MODEL_LABELS[key],
+                    "delta": val - ams_h,
+                }
+            )
     if not rows:
         return
     plot_df = pd.DataFrame(rows)
-    fig, ax = plt.subplots(figsize=(6.8, 4.2))
-    colors = ["#1F4E79" if v >= 0 else "#9A3B12" for v in plot_df["delta"]]
-    ax.bar(plot_df["dataset"], plot_df["delta"], color=colors, width=0.62)
+    hues = [lab for lab in LABEL_ORDER if lab != "AMS" and lab in set(plot_df["model"])]
+    fig, ax = plt.subplots(figsize=(11.2, 4.8))
+    sns.barplot(
+        data=plot_df,
+        x="dataset",
+        y="delta",
+        hue="model",
+        order=list(DATASET_ORDER),
+        hue_order=hues,
+        palette=LABEL_PALETTE,
+        ax=ax,
+    )
     ax.axhline(0.0, color="black", linewidth=0.8)
-    ax.set_title("Hard AUPRC gain of AMS over SkipGNN")
-    ax.set_ylabel("AMS − SkipGNN")
+    ax.set_title("Hard AUPRC relative to AMS (positive = better than AMS)")
+    ax.set_ylabel("Model − AMS")
     ax.set_xlabel("Dataset")
+    ax.legend(frameon=False, fontsize=8, ncol=3)
     ax.grid(axis="y", linestyle=":", linewidth=0.6, alpha=0.7)
     fig.savefig(out_path)
     plt.close(fig)
@@ -356,49 +365,84 @@ def plot_hard_auprc_box(df: pd.DataFrame, out_path: Path) -> None:
 
 
 def plot_uniform_vs_hard_auroc(df: pd.DataFrame, out_path: Path) -> None:
-    records: list[dict[str, Any]] = []
-    for _, rec in df.iterrows():
-        key = _model_key(rec["model"])
-        if key not in {"skipgnn", "ams"}:
-            continue
-        label = MODEL_LABELS[key]
-        if pd.notna(rec.get("uniform_auroc")):
-            records.append({"dataset": rec["dataset"], "auprc": float(rec["uniform_auroc"]), "series": f"{label} Uniform"})
-        elif pd.notna(rec.get("auroc")):
-            records.append({"dataset": rec["dataset"], "auprc": float(rec["auroc"]), "series": f"{label} Uniform"})
-        if pd.notna(rec.get("hard_auroc")):
-            records.append({"dataset": rec["dataset"], "auprc": float(rec["hard_auroc"]), "series": f"{label} Hard"})
-    if not records:
+    uni = _seed_metric_frame(df, "uniform_auroc", "auroc")
+    hard = _seed_metric_frame(df, "hard_auroc")
+    if uni.empty and hard.empty:
         return
-    plot_df = pd.DataFrame(records)
-    fig, ax = plt.subplots(figsize=(8.2, 4.6))
-    hue_order = [k for k in PALETTE if k in set(plot_df["series"])]
-    sns.barplot(
-        data=plot_df,
-        x="dataset",
-        y="auprc",
-        hue="series",
-        order=list(DATASET_ORDER),
-        hue_order=hue_order,
-        palette=PALETTE,
-        errorbar="sd",
-        capsize=0.06,
-        ax=ax,
-    )
-    ax.set_title("SkipGNN vs AMS — uniform and hard AUROC")
-    _finish(ax, "AUROC")
+    fig, axes = plt.subplots(1, 2, figsize=(12.4, 4.8), sharey=True)
+    panels = (("Uniform AUROC", uni), ("Hard AUROC", hard))
+    hues = [lab for lab in LABEL_ORDER if lab in set(pd.concat([uni, hard])["model"])]
+    for ax, (title, panel) in zip(axes, panels):
+        if panel.empty:
+            ax.set_title(title)
+            continue
+        sns.barplot(
+            data=panel,
+            x="dataset",
+            y="auprc",
+            hue="model",
+            order=list(DATASET_ORDER),
+            hue_order=[h for h in hues if h in set(panel["model"])],
+            palette=LABEL_PALETTE,
+            errorbar="sd",
+            capsize=0.05,
+            ax=ax,
+        )
+        ax.set_title(title)
+        _finish(ax, "AUROC")
+        if ax is not axes[0]:
+            legend = ax.get_legend()
+            if legend is not None:
+                legend.remove()
+        else:
+            ax.legend(frameon=False, fontsize=8, ncol=2, loc="lower right")
+    fig.suptitle("All models — AUROC, mean ± SD over seeds", y=1.03)
+    fig.tight_layout()
+    _footnote(fig, SEED_NOTE)
     fig.savefig(out_path)
     plt.close(fig)
 
 
-def plot_new_models_hard(df: pd.DataFrame, out_path: Path) -> None:
-    """Compare AMS with the three extra architectures on hard AUPRC."""
-    keep = {"ams", "gat", "3hop", "contrastive"}
-    panel = _seed_metric_frame(df[df["model"].map(_model_key).isin(keep)], "hard_auprc")
+def plot_hard_auprc_heatmap(df: pd.DataFrame, out_path: Path) -> None:
+    """Mean hard AUPRC, dataset × model. Blank cells were never trained."""
+    sub = df.dropna(subset=["hard_auprc"]).copy()
+    if sub.empty:
+        return
+    sub["model_key"] = sub["model"].map(_model_key)
+    pivot = (
+        sub.groupby(["dataset", "model_key"], as_index=False)["hard_auprc"]
+        .mean()
+        .pivot(index="dataset", columns="model_key", values="hard_auprc")
+    )
+    pivot = pivot.reindex(index=list(DATASET_ORDER), columns=list(MODEL_ORDER))
+    pivot.columns = [MODEL_LABELS.get(c, c) for c in pivot.columns]
+    fig, ax = plt.subplots(figsize=(9.4, 4.2))
+    sns.heatmap(
+        pivot,
+        annot=True,
+        fmt=".3f",
+        cmap="YlGnBu",
+        vmin=0.55,
+        vmax=0.95,
+        ax=ax,
+        linewidths=0.4,
+        linecolor="white",
+        cbar_kws={"label": "Hard AUPRC"},
+    )
+    ax.set_title("Mean hard AUPRC (3 seeds)")
+    ax.set_xlabel("Model")
+    ax.set_ylabel("Dataset")
+    fig.tight_layout()
+    fig.savefig(out_path)
+    plt.close(fig)
+
+
+def plot_f1_tau(df: pd.DataFrame, out_path: Path) -> None:
+    panel = _seed_metric_frame(df, "f1_tau")
     if panel.empty:
         return
-    hues = [lab for lab in ("AMS", "SkipGATv2", "3-hop", "Contrastive") if lab in set(panel["model"])]
-    fig, ax = plt.subplots(figsize=(8.6, 4.6))
+    hues = [lab for lab in LABEL_ORDER if lab in set(panel["model"])]
+    fig, ax = plt.subplots(figsize=(11.2, 4.8))
     sns.barplot(
         data=panel,
         x="dataset",
@@ -408,13 +452,13 @@ def plot_new_models_hard(df: pd.DataFrame, out_path: Path) -> None:
         hue_order=hues,
         palette=LABEL_PALETTE,
         errorbar="sd",
-        capsize=0.06,
+        capsize=0.05,
         ax=ax,
     )
-    ax.set_title("Hard AUPRC — AMS vs extra architectures")
-    _finish(ax, "Hard AUPRC")
-    ax.legend(frameon=False, fontsize=9)
-    _footnote(fig, GDI_COVERAGE_NOTE)
+    ax.set_title("Uniform-test F1 at validation-chosen τ*")
+    _finish(ax, "F1")
+    ax.legend(frameon=False, fontsize=8, ncol=2)
+    _footnote(fig, "Heuristic has no learned threshold; it is omitted. " + SEED_NOTE)
     fig.savefig(out_path)
     plt.close(fig)
 
@@ -514,14 +558,37 @@ def tidy_benchmark_csvs(results_dir: Path) -> None:
 
 
 def select_pr_curve_files(paths: list[Path]) -> dict[str, Path]:
-    """Prefer `pr_ams_seed42.npz` per dataset so fig4 is reproducible."""
+    """Prefer `pr_ams_seed42.npz` per dataset (legacy helper used by tests)."""
     by_dataset: dict[str, list[Path]] = {}
     for path in paths:
         by_dataset.setdefault(path.parent.name, []).append(path)
     chosen: dict[str, Path] = {}
     for dataset, group in by_dataset.items():
-        preferred = [p for p in group if p.stem.endswith("seed42")]
+        preferred = [p for p in group if p.stem.endswith("seed42") and "ams" in p.stem]
+        if not preferred:
+            preferred = [p for p in group if p.stem.endswith("seed42")]
         chosen[dataset] = preferred[0] if preferred else sorted(group)[0]
+    return chosen
+
+
+def collect_pr_curves_seed42(paths: list[Path]) -> dict[str, dict[str, Path]]:
+    """dataset → model → npz path, preferring seed 42."""
+    grouped: dict[str, dict[str, list[tuple[int, Path]]]] = {}
+    for path in paths:
+        stem = path.stem
+        if not stem.startswith("pr_") or "_seed" not in stem:
+            continue
+        body = stem[3:]
+        model, _, seed_s = body.rpartition("_seed")
+        if not model or not seed_s.isdigit():
+            continue
+        grouped.setdefault(path.parent.name, {}).setdefault(model, []).append((int(seed_s), path))
+    chosen: dict[str, dict[str, Path]] = {}
+    for dataset, models in grouped.items():
+        chosen[dataset] = {}
+        for model, items in models.items():
+            seed42 = [p for seed, p in items if seed == 42]
+            chosen[dataset][model] = seed42[0] if seed42 else sorted(items)[0][1]
     return chosen
 
 
@@ -536,23 +603,12 @@ def generate_all_figures(
 
     merged = _load_benchmarks(results_dir)
     if merged is not None:
-        records: list[dict[str, Any]] = []
-        for _, rec in merged.iterrows():
-            key = _model_key(rec["model"])
-            if key not in {"skipgnn", "ams"}:
-                continue
-            label = "SkipGNN" if key == "skipgnn" else "AMS"
-            if pd.notna(rec.get("uniform_auprc")):
-                records.append({"dataset": rec["dataset"], "auprc": float(rec["uniform_auprc"]), "series": f"{label} Uniform"})
-            if pd.notna(rec.get("hard_auprc")):
-                records.append({"dataset": rec["dataset"], "auprc": float(rec["hard_auprc"]), "series": f"{label} Hard"})
-        if records:
-            plot_uniform_vs_hard(pd.DataFrame(records), output_dir / "fig1_uniform_vs_hard_auprc.png")
-        plot_all_models_uniform_hard(merged, output_dir / "fig5_all_models_uniform_hard.png")
+        plot_all_models_uniform_hard(merged, output_dir / "fig1_uniform_vs_hard_auprc.png")
+        plot_hard_auprc_heatmap(merged, output_dir / "fig5_hard_auprc_heatmap.png")
         plot_delta_hard_auprc(merged, output_dir / "fig6_delta_hard_auprc.png")
         plot_hard_auprc_box(merged, output_dir / "fig7_hard_auprc_seeds.png")
         plot_uniform_vs_hard_auroc(merged, output_dir / "fig8_uniform_vs_hard_auroc.png")
-        plot_new_models_hard(merged, output_dir / "fig10_extra_architectures_hard_auprc.png")
+        plot_f1_tau(merged, output_dir / "fig10_f1_at_tau.png")
         write_comparison_table(merged, results_dir / "model_comparison.csv")
     plot_learning_curves(results_dir, output_dir / "fig9_learning_curves.png")
 
@@ -569,14 +625,16 @@ def generate_all_figures(
             output_dir / "fig3_missing_edge_robustness.png",
         )
 
-    pr_files = _result_files(results_dir, "pr_ams*.npz")
+    pr_files = _result_files(results_dir, "pr_*.npz")
     if pr_files:
-        curves: dict[str, tuple[np.ndarray, np.ndarray]] = {}
-        for dataset, path in select_pr_curve_files(pr_files).items():
-            blob = np.load(path)
-            prec = blob["prec"] if "prec" in blob.files else blob["precision"]
-            rec = blob["rec"] if "rec" in blob.files else blob["recall"]
-            curves[dataset] = (prec, rec)
+        curves: dict[str, dict[str, tuple[np.ndarray, np.ndarray]]] = {}
+        for dataset, models in collect_pr_curves_seed42(pr_files).items():
+            curves[dataset] = {}
+            for model, path in models.items():
+                blob = np.load(path)
+                prec = blob["prec"] if "prec" in blob.files else blob["precision"]
+                rec = blob["rec"] if "rec" in blob.files else blob["recall"]
+                curves[dataset][model] = (prec, rec)
         if curves:
             plot_pr_grid(curves, output_dir / "fig4_precision_recall_curves.png")
 
