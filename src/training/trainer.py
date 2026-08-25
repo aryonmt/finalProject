@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import random
+import time
 from typing import Any, Callable
 
 import numpy as np
@@ -37,6 +38,24 @@ def _skip_matrix(bundle: DatasetBundle, model: torch.nn.Module):
     return None
 
 
+def _encode_outputs(
+    model: torch.nn.Module,
+    bundle: DatasetBundle,
+    skip,
+) -> tuple[torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
+    """One full-graph encoder pass. Contrastive models also return the two views."""
+    kind = getattr(model, "skip_kind", "none")
+    x, adj = bundle.features, bundle.f_orig
+    if kind == "three_hop_bundle":
+        return model.encode(x, adj, skip[0], skip[1]), None, None
+    if kind == "none":
+        return model.encode(x, adj, None), None, None
+    packed = model.encode(x, adj, skip)
+    if isinstance(packed, tuple) and len(packed) == 3:
+        return packed[0], packed[1], packed[2]
+    return packed, None, None
+
+
 def _unpack_logits(out) -> torch.Tensor:
     if isinstance(out, (tuple, list)):
         return out[0]
@@ -50,14 +69,15 @@ def predict_probs(
     pairs: np.ndarray,
     batch_size: int = 2048,
 ) -> np.ndarray:
+    """Score pairs. Encodes the graph once, then decodes in batches."""
     model.eval()
     device = bundle.features.device
     skip = _skip_matrix(bundle, model)
+    emb, _, _ = _encode_outputs(model, bundle, skip)
     outs: list[np.ndarray] = []
     for start in range(0, len(pairs), batch_size):
         batch = torch.as_tensor(pairs[start : start + batch_size], device=device)
-        out = model(bundle.features, bundle.f_orig, batch, skip)
-        logits = _unpack_logits(out)
+        logits = model.decode(emb, batch)
         outs.append(torch.sigmoid(logits).detach().cpu().numpy())
     return np.concatenate(outs, axis=0) if outs else np.zeros((0,), dtype=np.float32)
 
@@ -67,12 +87,7 @@ def extract_node_embeddings(model: torch.nn.Module, bundle: DatasetBundle) -> np
     """Return (n_nodes, d) embeddings from the trained encoder."""
     model.eval()
     skip = _skip_matrix(bundle, model)
-    dummy = torch.zeros((1, 2), dtype=torch.long, device=bundle.features.device)
-    out = model(bundle.features, bundle.f_orig, dummy, skip)
-    if isinstance(out, (tuple, list)) and len(out) >= 2:
-        emb = out[1]
-    else:
-        raise RuntimeError("model forward did not return embeddings")
+    emb, _, _ = _encode_outputs(model, bundle, skip)
     return emb.detach().cpu().numpy()
 
 
@@ -88,11 +103,17 @@ def train_one_model(
     grad_clip: float = 5.0,
     seed: int = 42,
     log_fn: Callable[[str], None] | None = None,
+    encode_once: bool = True,
 ) -> dict[str, Any]:
     """Train with BCE (+ optional contrastive term), early-stop on val AUPRC.
 
     After restoring the best checkpoint, scores the official uniform test split
     and a hard negative bank sampled from the train graph only.
+
+    `encode_once=True` (default) runs the GNN encoder once per epoch, then
+    minibatches only the decoder. That is required for GDI-scale skip graphs:
+    encoding every decoder batch repeats a multi-million-edge GAT hundreds of
+    times per epoch.
     """
     set_seed(seed)
     device = bundle.features.device
@@ -110,33 +131,60 @@ def train_one_model(
     best_auprc = -1.0
     stall = 0
     history: list[dict[str, float]] = []
+    lambda_cl = float(getattr(model, "lambda_cl", 0.1))
 
     for epoch in range(1, epochs + 1):
         model.train()
         total_loss = 0.0
         n_seen = 0
-        for pairs, labels in loader:
-            pairs = pairs.to(device)
-            labels = labels.to(device)
+        t_enc = 0.0
+        if encode_once:
             opt.zero_grad(set_to_none=True)
-            out = model(bundle.features, bundle.f_orig, pairs, skip)
-            if isinstance(out, tuple) and len(out) == 3:
-                logits, _, cl_loss = out
-                loss = loss_fn(logits, labels) + float(getattr(model, "lambda_cl", 0.1)) * cl_loss
-            else:
-                logits = _unpack_logits(out)
+            t0 = time.perf_counter()
+            emb, h_o2, h_s2 = _encode_outputs(model, bundle, skip)
+            t_enc = time.perf_counter() - t0
+            batch_losses: list[torch.Tensor] = []
+            for pairs, labels in loader:
+                pairs = pairs.to(device)
+                labels = labels.to(device)
+                logits = model.decode(emb, pairs)
                 loss = loss_fn(logits, labels)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-            opt.step()
-            bs = int(labels.size(0))
-            total_loss += float(loss.item()) * bs
-            n_seen += bs
+                if h_o2 is not None and h_s2 is not None:
+                    loss = loss + lambda_cl * model.contrastive_loss(h_o2, h_s2, pairs.reshape(-1))
+                bs = int(labels.size(0))
+                batch_losses.append(loss * bs)
+                n_seen += bs
+            if batch_losses:
+                mean_loss = torch.stack(batch_losses).sum() / max(1, n_seen)
+                mean_loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                opt.step()
+                total_loss = float(mean_loss.detach().item()) * n_seen
+        else:
+            for pairs, labels in loader:
+                pairs = pairs.to(device)
+                labels = labels.to(device)
+                opt.zero_grad(set_to_none=True)
+                out = model(bundle.features, bundle.f_orig, pairs, skip)
+                if isinstance(out, tuple) and len(out) == 3:
+                    logits, _, cl_loss = out
+                    loss = loss_fn(logits, labels) + lambda_cl * cl_loss
+                else:
+                    logits = _unpack_logits(out)
+                    loss = loss_fn(logits, labels)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                opt.step()
+                bs = int(labels.size(0))
+                total_loss += float(loss.item()) * bs
+                n_seen += bs
         epoch_loss = total_loss / max(1, n_seen)
         val_probs = predict_probs(model, bundle, bundle.val.pairs)
         val_auprc = float(average_precision_score(bundle.val.labels, val_probs))
         history.append({"epoch": epoch, "loss": epoch_loss, "val_auprc": val_auprc})
         msg = f"epoch={epoch:02d} loss={epoch_loss:.4f} val_auprc={val_auprc:.4f}"
+        if encode_once:
+            msg = f"{msg} encode_s={t_enc:.2f}"
         if log_fn:
             log_fn(msg)
         else:

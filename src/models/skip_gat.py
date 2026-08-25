@@ -8,8 +8,38 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# Peak attention memory is O(chunk), not O(E). Lower this on small GPUs.
-EDGE_CHUNK = int(os.environ.get("GAT_EDGE_CHUNK", "131072"))
+# Chunked path: peak activation is O(chunk), not O(E). Used only when a full
+# (E, heads, d_k) score tensor would exceed GAT_VECTORIZED_MAX_BYTES.
+EDGE_CHUNK = int(os.environ.get("GAT_EDGE_CHUNK", "1048576"))
+VECTORIZED_MAX_BYTES = int(os.environ.get("GAT_VECTORIZED_MAX_BYTES", str(384 * 1024 * 1024)))
+
+
+def _softmax_gatv2(
+    h_src: torch.Tensor,
+    h_dst: torch.Tensor,
+    attn_vec: torch.Tensor,
+    u_idx: torch.Tensor,
+    v_idx: torch.Tensor,
+    negative_slope: float,
+    dropout: float,
+    training: bool,
+) -> torch.Tensor:
+    """Vectorized sparse GATv2. Fast, but stores (E, heads, d_k) for autograd."""
+    n_nodes, heads, d_k = h_src.shape
+    edge_feat = F.leaky_relu(h_src[u_idx] + h_dst[v_idx], negative_slope=negative_slope)
+    score = (edge_feat * attn_vec.unsqueeze(0)).sum(dim=-1)
+    max_score = torch.full((n_nodes, heads), torch.finfo(score.dtype).min, device=score.device, dtype=score.dtype)
+    max_score.scatter_reduce_(0, u_idx.unsqueeze(-1).expand_as(score), score, reduce="amax", include_self=True)
+    exp = torch.exp(score - max_score[u_idx])
+    denom = h_src.new_zeros(n_nodes, heads)
+    denom.index_add_(0, u_idx, exp)
+    alpha = exp / denom[u_idx].clamp_min(1e-12)
+    if training and dropout > 0:
+        keep = torch.rand_like(alpha) >= dropout
+        alpha = alpha * keep.to(alpha.dtype) / (1.0 - dropout)
+    out = h_src.new_zeros(n_nodes, heads, d_k)
+    out.index_add_(0, u_idx, h_dst[v_idx] * alpha.unsqueeze(-1))
+    return out
 
 
 class _ChunkedSparseGATv2(torch.autograd.Function):
@@ -169,7 +199,7 @@ class SparseGATv2Layer(nn.Module):
     def forward(self, x: torch.Tensor, adj_sparse: torch.Tensor) -> torch.Tensor:
         if not adj_sparse.is_sparse:
             raise TypeError("SparseGATv2Layer expects a sparse COO adjacency")
-        adj = adj_sparse.coalesce()
+        adj = adj_sparse if adj_sparse.is_coalesced() else adj_sparse.coalesce()
         n_nodes = x.size(0)
         h_src = self._linear(x, self.w_src).view(n_nodes, self.heads, self.d_k)
         h_dst = self._linear(x, self.w_dst).view(n_nodes, self.heads, self.d_k)
@@ -179,17 +209,30 @@ class SparseGATv2Layer(nn.Module):
             return self.bias.expand(n_nodes, -1).clone()
 
         u_idx, v_idx = indices[0], indices[1]
-        out = _ChunkedSparseGATv2.apply(
-            h_src,
-            h_dst,
-            self.attn_vec,
-            u_idx,
-            v_idx,
-            float(self.negative_slope),
-            float(self.dropout),
-            bool(self.training),
-            int(EDGE_CHUNK),
-        )
+        nbytes = int(u_idx.numel()) * self.heads * self.d_k * h_src.element_size()
+        if nbytes <= VECTORIZED_MAX_BYTES:
+            out = _softmax_gatv2(
+                h_src,
+                h_dst,
+                self.attn_vec,
+                u_idx,
+                v_idx,
+                float(self.negative_slope),
+                float(self.dropout),
+                bool(self.training),
+            )
+        else:
+            out = _ChunkedSparseGATv2.apply(
+                h_src,
+                h_dst,
+                self.attn_vec,
+                u_idx,
+                v_idx,
+                float(self.negative_slope),
+                float(self.dropout),
+                bool(self.training),
+                int(EDGE_CHUNK),
+            )
         return out.reshape(n_nodes, self.heads * self.d_k) + self.bias
 
 

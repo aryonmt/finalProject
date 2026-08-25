@@ -235,7 +235,7 @@ def test_extract_node_embeddings_shape():
 
 
 def test_chunked_gat_matches_large_chunk():
-    from src.models.skip_gat import _ChunkedSparseGATv2
+    from src.models.skip_gat import _ChunkedSparseGATv2, _softmax_gatv2
 
     torch.manual_seed(0)
     n_nodes, heads, d_k = 20, 2, 4
@@ -245,11 +245,58 @@ def test_chunked_gat_matches_large_chunk():
     attn = torch.randn(heads, d_k, requires_grad=True)
     u = torch.randint(0, n_nodes, (n_edges,))
     v = torch.randint(0, n_nodes, (n_edges,))
-    kwargs = dict(negative_slope=0.2, dropout=0.0, training=False)
     out_a = _ChunkedSparseGATv2.apply(h_src, h_dst, attn, u, v, 0.2, 0.0, False, 7)
     out_b = _ChunkedSparseGATv2.apply(h_src, h_dst, attn, u, v, 0.2, 0.0, False, 10_000)
+    out_c = _softmax_gatv2(h_src, h_dst, attn, u, v, 0.2, 0.0, False)
     assert torch.allclose(out_a, out_b, atol=1e-5, rtol=1e-5)
+    assert torch.allclose(out_a, out_c, atol=1e-5, rtol=1e-5)
     out_a.sum().backward()
     assert torch.isfinite(h_src.grad).all()
     assert torch.isfinite(h_dst.grad).all()
     assert torch.isfinite(attn.grad).all()
+
+
+def test_encode_once_trains_new_models():
+    from src.data.types import DatasetBundle, SplitArrays
+    from src.training.trainer import train_one_model
+
+    n, d = 16, 16
+    x = torch.eye(n)
+    idx = torch.stack([torch.arange(n), (torch.arange(n) + 1) % n])
+    adj = torch.sparse_coo_tensor(idx, torch.ones(n), (n, n)).coalesce()
+    rng = np.random.default_rng(0)
+    pairs = rng.integers(0, n, size=(32, 2))
+    labels = rng.integers(0, 2, size=32).astype(np.int32)
+    bundle = DatasetBundle(
+        name="toy",
+        n_nodes=n,
+        n_source=8,
+        n_target=8,
+        bipartite=False,
+        features=x,
+        adj_train=sp.csr_matrix((n, n), dtype=np.float32),
+        f_orig=adj,
+        f_skip_bin=adj,
+        f_skip_weighted=adj,
+        f_3hop=adj,
+        train=SplitArrays(pairs, labels),
+        val=SplitArrays(pairs[:8], np.array([0, 0, 0, 0, 1, 1, 1, 1], dtype=np.int32)),
+        test=SplitArrays(pairs[:8], np.array([0, 0, 0, 0, 1, 1, 1, 1], dtype=np.int32)),
+        known_positives=set(),
+        input_type="one_hot",
+    )
+    for name in ("gat", "3hop", "contrastive"):
+        class _B:
+            n_features = d
+
+        model = build_model(name, _B(), hidden1=8, hidden2=8, decoder_hidden=8, dropout=0.0)
+        metrics = train_one_model(
+            model,
+            bundle,
+            epochs=1,
+            batch_size=8,
+            patience=9,
+            seed=0,
+            encode_once=True,
+        )
+        assert np.isfinite(metrics["best_val_auprc"])
