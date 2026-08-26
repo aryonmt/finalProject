@@ -51,20 +51,11 @@ figures/*
 !figures/README.md
 !figures/*.png
 
-# LaTeX build artifacts (report sources are tracked)
-report/latex/*.aux
-report/latex/*.log
-report/latex/*.toc
-report/latex/*.lof
-report/latex/*.lot
-report/latex/*.out
-report/latex/*.bbl
-report/latex/*.blg
-report/latex/*.bcf
-report/latex/*.run.xml
-report/latex/*.synctex.gz
-report/latex/*.fls
-report/latex/*.fdb_latexmk
+# Report: only the compiled PDF is tracked
+report/*
+!report/latex/
+report/latex/*
+!report/latex/main.pdf
 
 # Kaggle / review archives
 *.zip
