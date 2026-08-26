@@ -1,0 +1,523 @@
+% Auto-generated from report/5.md — do not edit by hand.
+\section{پروتکل آموزش و تنظیمات آزمایشگاهی}\label{sec:5-1}
+
+
+\subsection{زیرساخت محاسباتی و استراتژی آموزش}\label{sec:5-1-1}
+
+
+تمامی آزمایش‌های گزارش‌شده در این فصل بر روی پردازنده گرافیکی \lr{NVIDIA Tesla T4} (با ۱۶ گیگابایت حافظه \lr{VRAM}) در بستر ابری \lr{Kaggle} اجرا شده‌اند. پایپ‌لاین آموزش بر پایه یک استراتژی دو مرحله‌ای طراحی شده است:
+
+\textbf{مرحله انکودینگ (\lr{Full-Graph Forward}):} کل ماتریس ویژگی $X$ و ماتریس‌های تنک مجاورت ($F$, $F_s$, $F_3$) در هر فراخوانی در حافظه \lr{GPU} پردازش شده و امبدینگ تمام $N$ گره تولید می‌شود.
+
+\textbf{مرحله دیکودینگ دسته‌ای (\lr{Decoder-Only Batching}):} دسته‌بندی صرفاً روی جفت‌یال‌های دیکودر اعمال می‌شود.
+
+\textbf{نکته روش‌شناختی مهم:} در پروتکل گزارش‌شده، انکودر در هر بچ دیکودر مجدداً فراخوانی می‌شود (\lr{Encode Every Batch}). این بدان معناست که به ازای هر بچ آموزشی، یک گام کامل بهینه‌سازی \lr{Adam} انجام می‌شود. این پروتکل با مدل مرجع \lr{SkipGNN} هم‌خوان است و از کم‌برازش جلوگیری می‌کند. پرچم \pcode{--encode-once} (که انکودر را فقط یک بار در هر اپاک فراخوانی می‌کند) صرفاً یک بهینه‌سازی سرعت است و برای نتایج گزارش‌شده استفاده \textbf{نشده} است.
+
+\subsection{هایپرپارامترهای مشترک}\label{sec:5-1-2}
+
+
+جدول ۵-۱ تنظیمات مشترک تمامی مدل‌های عصبی را نشان می‌دهد:
+
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{هایپرپارامترهای مشترک آموزش}
+\label{tab:5-1}
+\begin{tabularx}{\textwidth}{>{\hspace{0pt}}p{0.22\textwidth}>{\hspace{0pt}}X>{\hspace{0pt}}X}
+\toprule
+پارامتر & مقدار & منبع در کد \\
+\midrule
+بعد فضای نهفته ($d_1 = d_2$) & ۶۴ & \pcode{configs/default.yaml}: \pcode{hidden\_dim} \\
+بعد دیکودر ($d_{\text{\lr{dec}}}$) & ۶۴ & \pcode{configs/default.yaml}: \pcode{decoder\_hidden} \\
+احتمال خاموشی تصادفی (\lr{Dropout}) & ۰.۵ & \pcode{configs/default.yaml}: \pcode{dropout} \\
+نرخ یادگیری (\lr{Adam}) & $10^{-3}$ & \pcode{configs/default.yaml}: \pcode{lr} \\
+جریمه وزن (\lr{Weight Decay}) & $5 \times 10^{-4}$ & \pcode{configs/default.yaml}: \pcode{weight\_decay} \\
+حد برش گرادیان (\lr{Gradient Clip}) & ۵.۰ & \pcode{configs/default.yaml}: \pcode{grad\_clip} \\
+ویژگی‌های ورودی & وان-هات تنک ($I_N$) & \pcode{configs/default.yaml}: \pcode{input\_type} \\
+سیدهای تصادفی & ۴۲، ۱۲۳، ۷ & \pcode{configs/default.yaml}: \pcode{seeds\_stage1} \\
+تابع زیان & \pcode{BCEWithLogitsLoss} & \pcode{src/training/trainer.py} \\
+زیان مقابله‌ای (فقط \lr{Contrastive}) & $\lambda_{\text{\lr{CL}}} = 0.1$, $\tau = 0.2$ & \pcode{src/models/contrastive\_skipgnn.py} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+
+\subsection{تنظیمات اختصاصی هر دیتاست و پروتکل مقایسه}\label{sec:5-1-3}
+
+
+جدول ۵-۲ تنظیمات اختصاصی دیتاست‌ها و وضعیت پروتکل مقایسه را نشان می‌دهد. ستون آخر مشخص می‌کند که مقایسه هر مدل با مدل مرجع در آن دیتاست معتبر است یا با محدودیت مواجه است:
+
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{تنظیمات اختصاصی دیتاست‌ها و اعتبار مقایسه}
+\label{tab:5-2}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llllllll}
+\toprule
+دیتاست & اپاک & صبر & بچ (مبنا) & بچ (مدل‌های اضافی) & گام‌های \lr{Adam}/اپاک (مبنا) & گام‌های \lr{Adam}/اپاک (اضافی) & وضعیت مقایسه \\
+\midrule
+\lr{DTI} & ۳۰ & ۸ & ۱۲۸ & ۱۲۸ & ۱۶۵ & ۱۶۵ & \textbf{هم‌خوان کامل} \\
+\lr{DDI} & ۳۰ & ۸ & ۱۲۸ & ۱۰۲۴ & ۵۳۰ & ۶۶ & اضافی‌ها گام کمتر \\
+\lr{PPI} & ۳۰ & ۸ & ۱۲۸ & ۱۰۲۴ & ۲۵۵ & ۳۱ & اضافی‌ها گام کمتر \\
+\lr{GDI} & ۲۰ & ۶ & ۲۵۶ & ۱۰۲۴ & ۴۴۷ & ۱۱۱ & اضافی‌ها گام کمتر \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+
+\textbf{توضیح:} در دیتاست‌های \lr{DDI}، \lr{PPI} و \lr{GDI}، مدل‌های اضافی (\lr{SkipGATv2}، \lr{3-hop}، \lr{Contrastive}) با بچ‌سایز ۱۰۲۴ اجرا شده‌اند که تعداد گام‌های \lr{Adam} کمتری نسبت به مدل‌های مبنا (بچ ۱۲۸ یا ۲۵۶) دریافت کرده‌اند. این تفاوت در تعداد گام‌های بهینه‌سازی به‌عنوان یک محدودیت مقایسه‌ای در تفسیر نتایج این دیتاست‌ها لحاظ شده است. با این حال، برتری مدل‌های اضافی در این دیتاست‌ها با وجود گام‌های کمتر، به‌عنوان شواهدی بر کارآمدی معماری آن‌ها (نه صرفاً بودجه محاسباتی بیشتر) تفسیر می‌شود. این نکته در فصل ششم به تفصیل بحث شده است.
+
+در دیتاست \lr{DTI}، تمام مدل‌ها با بچ‌سایز یکسان ۱۲۸ اجرا شده‌اند و مقایسه کاملاً هم‌خوان است.
+
+\subsection{مکانیزم توقف زودهنگام و انتخاب آستانه}\label{sec:5-1-4}
+
+
+\textbf{توقف زودهنگام:} در انتهای هر اپاک، مساحت زیر منحنی دقت-بازخوانی اعتبارسنجی ($\text{\lr{Val AUPRC}}$) محاسبه می‌شود. بهترین حالت مدل ذخیره شده و در صورت عدم بهبود به مدت \pcode{patience} اپاک متوالی، آموزش خاتمه می‌یابد.
+
+\textbf{انتخاب آستانه تصمیم‌گیری ($\tau^*$):} آستانه بهینه‌ساز شاخص \lr{F1} با پویش ۹۱ نقطه‌ای در بازه $[0.05, 0.95]$ صرفاً روی احتمالات مجموعه اعتبارسنجی استخراج و سپس برای ارزیابی نهایی منجمد می‌گردد:
+
+
+\begin{equation}
+\label{eq:5.1}
+\tau^* = \arg\max_{\tau \in [0.05, 0.95]} \text{\lr{F1}}\left(y_{\text{\lr{val}}}, \mathbb{I}(p_{\text{\lr{val}}} \ge \tau)\right)
+\end{equation}
+
+
+صحت این جداسازی در آزمون واحد \pcode{test\_threshold\_is\_validation\_only} تضمین شده است.
+
+\subsection{ملاحظات آماری و معیار پراکندگی}\label{sec:5-1-5}
+
+
+\textbf{تعداد سیدها:} تمامی آزمایش‌ها با ۳ سید تصادفی (۴۲، ۱۲۳، ۷) اجرا شده‌اند. این تعداد به دلیل محدودیت‌های محاسباتی پروتکل ارزیابی دوگانه (ساخت بانک منفی سخت، آموزش ۷ مدل، و ۴ دیتاست بر روی \lr{GPU T4}) انتخاب شده است.
+
+\textbf{معیار پراکندگی:} انحراف معیار ($\text{\lr{SD}}$) در میان ۳ سید گزارش می‌شود. در تحلیل‌های تطبیقی، عدم هم‌پوشانی بازه‌های میانگین $\pm$ انحراف معیار به‌عنوان شاخص اولیه تمایز عملکرد در نظر گرفته شده است.
+
+\textbf{معیار تمایز آماری:} در این گزارش، دو مدل از نظر آماری «قابل تفکیک» تلقی می‌شوند که بازه‌های $[\text{\lr{Mean}} - \text{\lr{SD}}, \text{\lr{Mean}} + \text{\lr{SD}}]$ آن‌ها با یکدیگر هم‌پوشانی نداشته باشند. در صورت هم‌پوشانی بازه‌ها، دو مدل «هم‌سطح آماری» تلقی شده و ادعای برتری یکی بر دیگری معتبر نیست.
+
+\textbf{محدودیت:} آزمون‌های معناداری آماری رسمی (مانند \lr{paired t-test} یا \lr{Wilcoxon signed-rank}) به دلیل تعداد محدود سیدها انجام نشده‌اند. این محدودیت در فصل ششم به‌صراحت ذکر شده است.
+
+\section{نتایج تجربی کلان: ارزیابی هفت مدل}\label{sec:5-2}
+
+
+\subsection{ماتریس جامع نتایج \lr{AUPRC}}\label{sec:5-2-1}
+
+
+جدول ۵-۳ نتایج مساحت زیر منحنی دقت-بازخوانی (\lr{AUPRC}) را در هر دو بانک آزمون یکنواخت و سخت گزارش می‌کند. مقادیر به فرم $\text{\lr{Mean}} \pm \text{\lr{SD}}$ در میان ۳ سید هستند. علامت ★ برترین عملکرد در هر ستون را نشان می‌دهد.
+
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{نتایج \lr{AUPRC} در بانک‌های یکنواخت و سخت (میانگین $\pm$ انحراف معیار، ۳ سید)}
+\label{tab:5-3}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lllllllll}
+\toprule
+مدل & \lr{DTI Uniform} & \lr{DTI Hard} & \lr{DDI Uniform} & \lr{DDI Hard} & \lr{PPI Uniform} & \lr{PPI Hard} & \lr{GDI Uniform} & \lr{GDI Hard} \\
+\midrule
+\lr{GCN} & $0.916 \pm 0.000$ & $0.731 \pm 0.002$ & $0.907 \pm 0.000$ & $0.658 \pm 0.001$ & $0.920 \pm 0.001$ & $0.609 \pm 0.015$ & $0.934 \pm 0.001$ & $0.749 \pm 0.008$ \\
+\lr{SkipGNN} & $0.929 \pm 0.001$ & $0.695 \pm 0.012$ & $0.929 \pm 0.001$ & $0.724 \pm 0.005$ & $0.928 \pm 0.002$ & $0.622 \pm 0.012$ & $0.934 \pm 0.002$ & $0.720 \pm 0.012$ \\
+\lr{Heuristic} (\lr{RA}) & $0.806$ & $0.776$ & $0.890$ & $0.672$ & $0.671$ & $0.578$ & $0.917$ & $\mathbf{0.842 \pm 0.001}$ $\star$ \\
+\lr{SkipGATv2} & $0.912 \pm 0.008$ & $\mathbf{0.804 \pm 0.005}$ & $0.967 \pm 0.004$ & $0.900 \pm 0.007$ & $0.895 \pm 0.005$ & $\mathbf{0.778 \pm 0.006}$ $\star$ & $0.934 \pm 0.007$ & $0.837 \pm 0.003$ \\
+\lr{3-hop} & $0.920 \pm 0.004$ & $0.803 \pm 0.015$ & $0.978 \pm 0.002$ & $0.895 \pm 0.009$ & $0.933 \pm 0.003$ & $0.688 \pm 0.021$ & $0.950 \pm 0.004$ & $0.832 \pm 0.003$ \\
+\lr{Contrastive} & $0.918 \pm 0.002$ & $0.800 \pm 0.017$ & $0.980 \pm 0.001$ & $0.905 \pm 0.003$ & $0.933 \pm 0.003$ & $0.657 \pm 0.025$ & $0.949 \pm 0.003$ & $0.833 \pm 0.008$ \\
+\lr{AMS-SkipGNN} & $0.920 \pm 0.006$ & $0.798 \pm 0.011$ & $0.980 \pm 0.001$ & $\mathbf{0.912 \pm 0.003}$ $\star$ & $0.931 \pm 0.004$ & $0.674 \pm 0.016$ & $0.951 \pm 0.001$ & $0.829 \pm 0.003$ \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+
+\textbf{تحلیل اولیه:}
+\begin{itemize}
+\item در بانک یکنواخت، تمام مدل‌های عصبی در محدوده $0.89$ تا $0.98$ قرار دارند و تمایز معناداری میان آن‌ها مشاهده نمی‌شود.
+\item در بانک سخت، تفاوت‌های عملکردی آشکار می‌شوند: مدل مرجع \lr{SkipGNN} در تمام چهار دیتاست افت قابل‌توجهی نشان می‌دهد.
+\item در دیتاست \lr{GDI}، هوریستیک تحلیلی تخصیص منابع با $0.842$ بالاترین امتیاز را کسب کرده است.
+\end{itemize}
+
+\subsection{تحلیل هم‌سطحی آماری در دیتاست \lr{DTI}}\label{sec:5-2-2}
+
+
+در دیتاست \lr{DTI}، سه مدل پیشنهادی  -  \lr{AMS} ($0.798 \pm 0.011$)، \lr{SkipGATv2} ($0.804 \pm 0.005$) و \lr{3-hop} ($0.803 \pm 0.015$)  -  بازه‌های انحراف معیار هم‌پوشانی دارند:
+
+\begin{itemize}
+\item بازه \lr{AMS}: $[0.787, 0.809]$
+\item بازه \lr{SkipGATv2}: $[0.799, 0.809]$
+\item بازه \lr{3-hop}: $[0.788, 0.818]$
+\end{itemize}
+
+طبق معیار عدم هم‌پوشانی بازه‌ها (بخش ۵-۱-۵)، این سه مدل از نظر آماری قابل تفکیک نیستند و هم‌سطح تلقی می‌شوند. برتری عددی \lr{SkipGATv2} ($+0.006$ نسبت به \lr{AMS}) در محدوده نویز سیدی است.
+
+\subsection{ماتریس نتایج \lr{AUROC} و \lr{F1}}\label{sec:5-2-3}
+
+
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{نتایج \lr{Hard AUROC} و \lr{F1} در آستانه بهینه $\tau^*$ (میانگین $\pm$ انحراف معیار، ۳ سید)}
+\label{tab:5-4}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lllllllll}
+\toprule
+مدل & \lr{DTI Hard AUROC} & \lr{DTI F1} & \lr{DDI Hard AUROC} & \lr{DDI F1} & \lr{PPI Hard AUROC} & \lr{PPI F1} & \lr{GDI Hard AUROC} & \lr{GDI F1} \\
+\midrule
+\lr{GCN} & $0.695 \pm 0.003$ & $0.843 \pm 0.001$ & $0.704 \pm 0.002$ & $0.865 \pm 0.001$ & $0.631 \pm 0.008$ & $0.842 \pm 0.004$ & $0.732 \pm 0.012$ & $0.860 \pm 0.003$ \\
+\lr{SkipGNN} & $0.660 \pm 0.020$ & $0.858 \pm 0.001$ & $0.758 \pm 0.007$ & $0.876 \pm 0.003$ & $0.638 \pm 0.012$ & $0.849 \pm 0.003$ & $0.704 \pm 0.010$ & $0.859 \pm 0.001$ \\
+\lr{SkipGATv2} & $0.773 \pm 0.006$ & $0.816 \pm 0.005$ & $0.907 \pm 0.007$ & $0.923 \pm 0.004$ & $\mathbf{0.770 \pm 0.006}$ $\star$ & $0.809 \pm 0.006$ & $0.829 \pm 0.003$ & $0.850 \pm 0.004$ \\
+\lr{3-hop} & $0.770 \pm 0.007$ & $0.822 \pm 0.012$ & $0.910 \pm 0.009$ & $0.933 \pm 0.010$ & $0.706 \pm 0.020$ & $0.851 \pm 0.004$ & $0.832 \pm 0.005$ & $0.889 \pm 0.003$ \\
+\lr{Contrastive} & $0.768 \pm 0.002$ & $0.820 \pm 0.001$ & $0.918 \pm 0.004$ & $0.941 \pm 0.002$ & $0.677 \pm 0.017$ & $0.861 \pm 0.003$ & $0.826 \pm 0.008$ & $0.888 \pm 0.002$ \\
+\lr{AMS} & $0.759 \pm 0.013$ & $0.818 \pm 0.017$ & $\mathbf{0.918 \pm 0.003}$ $\star$ & $0.938 \pm 0.001$ & $0.695 \pm 0.011$ & $0.852 \pm 0.008$ & $0.823 \pm 0.002$ & $0.887 \pm 0.002$ \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+
+\section{تحلیل تفصیلی نمودارها}\label{sec:5-3}
+
+
+\subsection{شکل ۱: مقایسه همزمان آزمون یکنواخت و سخت}\label{sec:5-3-1}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{fig1_uniform_vs_hard_auprc.png}
+\caption[مقایسه \lr{AUPRC} یکنواخت و سخت]{مقایسه همزمان \lr{AUPRC} در بانک یکنواخت (چپ) و بانک سخت (راست) برای هفت مدل. میله‌ها میانگین و خطوط خطا انحراف معیار در میان سه سید هستند.}
+\label{fig:uniform-hard-auprc}
+\end{figure}
+
+
+این نمودار میله‌ای دوپنلی، عملکرد تمام هفت مدل را در دو شرایط \lr{Uniform AUPRC} (پنل چپ) و \lr{Hard AUPRC} (پنل راست) به تصویر می‌کشد. میله‌ها نشان‌دهنده میانگین و خطوط خطا نشان‌دهنده انحراف معیار در میان ۳ سید هستند.
+
+\textbf{مشاهدات کلیدی:}
+
+\begin{itemize}
+\item \textbf{پنل چپ (\lr{Uniform}):} تمام مدل‌های عصبی در محدوده $0.89$ تا $0.98$ فشرده شده‌اند. مدل مرجع \lr{SkipGNN} در \lr{DTI} با $0.929$ در ظاهر رقابتی است.
+\item \textbf{پنل راست (\lr{Hard}):} به محض انتقال به منفی‌های هم‌درجه، عملکرد \lr{SkipGNN} در تمام چهار دیتاست کاهش می‌یابد (به‌ویژه افت از $0.929$ به $0.695$ در \lr{DTI}).
+\item \textbf{مدل‌های پیشنهادی:} در پنل راست، مدل‌های \lr{AMS}، \lr{SkipGATv2}، \lr{3-hop} و \lr{Contrastive} در صدر قرار دارند.
+\end{itemize}
+
+\textbf{تفسیر:} این الگو با یافته‌های لی و همکاران \cite{li2023evaluating} درباره محدودیت بنچمارک‌های مبتنی بر منفی‌های تصادفی هم‌راستا است. آزمون یکنواخت به دلیل غلبه منفی‌های کم‌درجه، تمایز ساختاری میان مدل‌ها را پنهان می‌کند.
+
+\subsection{شکل ۲: نردبان ابلیشن}\label{sec:5-3-2}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{fig2_ablation_ladder.png}
+\caption[نردبان ابلیشن \lr{AMS} در \lr{DTI}]{نردبان ابلیشن چهارمرحله‌ای مدل \lr{AMS} روی دیتاست \lr{DTI} در معیار \lr{Hard AUPRC}.}
+\label{fig:ablation-ladder}
+\end{figure}
+
+
+این نمودار سهم مستقل هر یک از اجزای معماری را در جهش عملکردی روی دیتاست \lr{DTI} نشان می‌دهد. نتایج عددی ابلیشن در جدول ۵-۵ خلاصه شده‌اند:
+
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{نتایج نردبان ابلیشن در دیتاست \lr{DTI} (\lr{Hard AUPRC})}
+\label{tab:5-5}
+\begin{tabular}{llll}
+\toprule
+گام & شناسه & تغییر & \lr{Hard AUPRC} \\
+\midrule
+۰ & \pcode{0\_skipgnn} & پرش باینری + جمع ساده + دیکودر الحاقی & $0.703 \pm 0.011$ \\
+۱ & \pcode{1\_weighted} & پرش وزن‌دار + جمع ساده + دیکودر الحاقی & $0.698 \pm 0.009$ \\
+۲ & \pcode{2\_gated} & پرش وزن‌دار + گیتینگ + دیکودر الحاقی & $0.686 \pm 0.013$ \\
+۳ & \pcode{3\_full} & پرش وزن‌دار + گیتینگ + دیکودر تانسوری & $\mathbf{0.788 \pm 0.010}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\textbf{تحلیل:}
+\begin{itemize}
+\item افزودن پرش وزن‌دار به‌تنهایی (گام ۰\faarrow{}۱) بهبود معناداری ایجاد نمی‌کند و حتی افت جزئی مشاهده می‌شود.
+\item افزودن گیتینگ بدون اصلاح دیکودر (گام ۱\faarrow{}۲) نیز بهبودی نشان نمی‌دهد.
+\item جهش اصلی با افزودن دیکودر تانسوری ۴‌گانه (گام ۲\faarrow{}۳) رخ می‌دهد: بهبود مطلق $+0.102$ واحد درصد.
+\end{itemize}
+
+\textbf{تفسیر:} این یافته نشان می‌دهد که بهبود مدل \lr{AMS} صرفاً ناشی از یک مؤلفه منفرد نیست، بلکه نتیجه هم‌افزایی میان بازنمایی پیوسته پرش، ادغام تطبیقی، و ظرفیت تعاملی دیکودر تانسوری است. دیکودر الحاقی ساده، حتی با بازنمایی بهبودیافته، قادر به استخراج تعاملات غیرخطی لازم برای تفکیک منفی‌های سخت نیست.
+
+\textbf{محدودیت:} ابلیشن صرفاً روی دیتاست \lr{DTI} اجرا شده است. تعمیم این یافته به سایر دیتاست‌ها نیازمند اجرای ابلیشن بر روی حداقل یک دیتاست همگن (مانند \lr{DDI}) است که به‌عنوان کار آینده پیشنهاد می‌شود.
+
+\subsection{شکل ۳: مقاومت در برابر حذف یال}\label{sec:5-3-3}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{fig3_missing_edge_robustness.png}
+\caption[مقاومت در برابر حذف یال]{مقاومت مدل‌ها در برابر حذف تصادفی یال‌های آموزشی در دیتاست \lr{DTI}.}
+\label{fig:robustness}
+\end{figure}
+
+
+این نمودار رفتار مدل‌ها را با حذف تصادفی ۱۰\% تا ۹۰\% از یال‌های آموزشی در دیتاست \lr{DTI} نشان می‌دهد.
+
+\textbf{مشاهدات:}
+\begin{itemize}
+\item در تمام نسبت‌های حذف ($0.1$ تا $0.9$)، مدل \lr{AMS} بالاتر از \lr{SkipGNN} و بالاتر از \lr{GCN} قرار دارد.
+\item حتی با حذف ۹۰\% یال‌ها، مدل \lr{AMS} همچنان \lr{AUPRC} بالای $0.910$ را حفظ می‌کند.
+\item شیب نزولی عملکرد در مدل‌های پیشنهادی ملایم‌تر از خطوط مبنا است.
+\end{itemize}
+
+\textbf{تفسیر:} پایداری در برابر فقر داده نشان می‌دهد که عملگر تخصیص منابع و دیکودر تانسوری، ساختارهای توپولوژیک را به‌صورت کارآمدتری از گراف تنک استخراج می‌کنند.
+
+\subsection{شکل ۴: منحنی‌های دقت-بازخوانی}\label{sec:5-3-4}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{fig4_precision_recall_curves.png}
+\caption[منحنی‌های دقت-بازخوانی]{منحنی‌های دقت-بازخوانی در آزمون یکنواخت، سید ۴۲. در نسخۀ فعلی مخزن، آرایه‌های ذخیره‌شده مربوط به مدل \lr{AMS} هستند؛ رتبه‌بندی هفت مدل در شکل~\ref{fig:uniform-hard-auprc} آمده است.}
+\label{fig:pr-curves}
+\end{figure}
+
+
+منحنی‌های \lr{Precision-Recall} در سید ۴۲ و در آزمون یکنواخت، رفتار عملیاتی مدل‌ها را نشان می‌دهند.
+
+\textbf{مشاهدات:}
+\begin{itemize}
+\item در دیتاست‌های متراکم (\lr{DDI} و \lr{GDI})، منحنی‌ها تا سطوح بالای بازخوانی، دقت نزدیک به ۱ را حفظ می‌کنند.
+\item در دیتاست‌های تنک (\lr{DTI} و \lr{PPI})، منحنی‌ها پس از بازخوانی حدود $0.7$ شیب نزولی پیدا می‌کنند.
+\item در بازخوانی کامل ($1.0$)، دقت به سطح پایه ($\approx 0.5$) می‌رسد که نشان‌دهنده کالیبراسیون صحیح منحنی‌ها است.
+\end{itemize}
+
+\subsection{شکل ۵: نقشه حرارتی عملکرد}\label{sec:5-3-5}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{fig5_hard_auprc_heatmap.png}
+\caption[نقشۀ حرارتی \lr{Hard AUPRC}]{نقشۀ حرارتی میانگین \lr{Hard AUPRC} (دیتاست $\times$ مدل) در سه سید.}
+\label{fig:heatmap}
+\end{figure}
+
+
+این ماتریس رنگی (دیتاست $\times$ مدل)، میانگین \lr{Hard AUPRC} را در ۳ سید نشان می‌دهد.
+
+\textbf{مشاهدات:}
+\begin{itemize}
+\item رنگ‌های آبی تیره ($0.80$ تا $0.91$) در ستون‌های مدل‌های پیشنهادی (به‌ویژه \lr{AMS} در \lr{DDI} و \lr{SkipGATv2} در \lr{PPI}) متمرکز هستند.
+\item ستون‌های \lr{GCN} و \lr{SkipGNN} با رنگ‌های روشن‌تر ($0.60$ تا $0.75$) نشان‌دهنده عملکرد ضعیف‌تر در شرایط سخت هستند.
+\item سلول هوریستیک در سطر \lr{GDI} با رنگ آبی تیره ($0.842$) نشان‌دهنده برترین عملکرد در آن دیتاست است.
+\end{itemize}
+
+\subsection{شکل ۶: دلتای بهبود نسبت به \lr{AMS}}\label{sec:5-3-6}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{fig6_delta_hard_auprc.png}
+\caption[دلتای \lr{Hard AUPRC} نسبت به \lr{AMS}]{دلتای \lr{Hard AUPRC} هر مدل نسبت به \lr{AMS} ($\Delta = \text{\lr{Model}} - \text{\lr{AMS}}$).}
+\label{fig:delta-ams}
+\end{figure}
+
+
+این نمودار تفاوت عملکرد هر مدل را نسبت به \lr{AMS} به‌عنوان خط تراز صفر ($\Delta = \text{\lr{Model}} - \text{\lr{AMS}}$) نشان می‌دهد.
+
+\textbf{تحلیل به تفکیک دیتاست:}
+
+\textbf{دیتاست \lr{DDI} (دارو-دارو):}
+\begin{itemize}
+\item \lr{SkipGNN}: $\Delta = -0.188$ (افت قابل‌توجه)
+\item \lr{GCN}: $\Delta = -0.254$ (افت قابل‌توجه)
+\item \lr{SkipGATv2}، \lr{3-hop}، \lr{Contrastive}: $\Delta \approx -0.007$ تا $-0.017$ (در محدوده \lr{AMS})
+\end{itemize}
+
+\textbf{دیتاست \lr{DTI} (دارو-هدف):}
+\begin{itemize}
+\item \lr{SkipGNN}: $\Delta = -0.103$
+\item \lr{GCN}: $\Delta = -0.067$
+\item \lr{SkipGATv2}: $\Delta = +0.006$ (در محدوده نویز سیدی، هم‌سطح با \lr{AMS})
+\item \lr{3-hop}: $\Delta = +0.005$ (هم‌سطح با \lr{AMS})
+\end{itemize}
+
+\textbf{دیتاست \lr{PPI} (پروتئین-پروتئین):}
+\begin{itemize}
+\item \lr{SkipGATv2}: $\Delta = +0.104$ (بهبود قابل‌توجه نسبت به \lr{AMS})
+\item \lr{SkipGNN}: $\Delta = -0.052$
+\item \lr{GCN}: $\Delta = -0.065$
+\end{itemize}
+
+\textbf{دیتاست \lr{GDI} (ژن-بیماری):}
+\begin{itemize}
+\item \lr{Heuristic}: $\Delta = +0.013$ (بالاتر از \lr{AMS})
+\item \lr{SkipGATv2}: $\Delta = +0.008$
+\item \lr{SkipGNN}: $\Delta = -0.109$
+\end{itemize}
+
+\textbf{نکته مهم:} در دیتاست \lr{PPI}، مدل \lr{SkipGATv2} با اختلاف $+0.104$ واحد درصد از \lr{AMS} پیشی گرفته است. با توجه به اینکه \lr{SkipGATv2} در \lr{PPI} تنها ۳۱ گام \lr{Adam} در هر اپاک دریافت کرده (در مقایسه با ۲۵۵ گام \lr{AMS})، این برتری به‌عنوان شواهدی بر کارآمدی ذاتی مکانیزم توجه پویا تفسیر می‌شود، نه صرفاً نتیجه بودجه محاسباتی بیشتر. این نکته در فصل ششم به تفصیل بحث شده است.
+
+\subsection{شکل ۷: توزیع بین‌سیدی}\label{sec:5-3-7}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{fig7_hard_auprc_seeds.png}
+\caption[توزیع بین‌سیدی \lr{Hard AUPRC}]{توزیع بین‌سیدی \lr{Hard AUPRC} برای تمام مدل‌ها (سیدهای ۴۲، ۱۲۳ و ۷).}
+\label{fig:seed-box}
+\end{figure}
+
+
+این نمودار جعبه‌ای، پایداری مدل‌ها را در ۳ سید (۴۲، ۱۲۳، ۷) نشان می‌دهد.
+
+\textbf{مشاهدات:}
+\begin{itemize}
+\item در دیتاست \lr{DDI}، جعبه‌های مدل‌های پیشنهادی ارتفاع بسیار کمی دارند (واریانس در حد $10^{-3}$ تا $10^{-4}$) که نشان‌دهنده پایداری بالای یادگیری در گراف متراکم است.
+\item در دیتاست‌های تنک‌تر (\lr{DTI} و \lr{PPI})، ارتفاع جعبه‌ها کمی بازتر است (انحراف معیار $0.005$ تا $0.021$).
+\item در دیتاست‌های تنک، جعبه‌های مدل‌های پیشنهادی با جعبه‌های \lr{GCN} و \lr{SkipGNN} همپوشانی ندارند.
+\end{itemize}
+
+\textbf{محدودیت آماری:} با ۳ سید، امکان محاسبه فواصل اطمینان ۹۵\% دقیق و آزمون‌های معناداری رسمی محدود است. عدم هم‌پوشانی جعبه‌ها به‌عنوان شاخص اولیه تمایز در نظر گرفته شده، ولی جایگزین آزمون‌های آماری رسمی نیست.
+
+\subsection{شکل ۸: مقایسه بر حسب \lr{AUROC}}\label{sec:5-3-8}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{fig8_uniform_vs_hard_auroc.png}
+\caption[مقایسه \lr{AUROC} یکنواخت و سخت]{مقایسه \lr{AUROC} در بانک یکنواخت و بانک سخت برای هفت مدل.}
+\label{fig:auroc}
+\end{figure}
+
+
+این نمودار الگوی مشابه شکل ۱ را برای معیار \lr{AUROC} تکرار می‌کند:
+
+\begin{itemize}
+\item در پنل یکنواخت، تمام مدل‌ها در محدوده $0.90$ تا $0.98$ فشرده هستند.
+\item در پنل سخت، عملکرد \lr{SkipGNN} در تمام دیتاست‌ها کاهش می‌یابد.
+\item مدل‌های پیشنهادی در محدوده $0.76$ تا $0.92$ قرار دارند.
+\end{itemize}
+
+\subsection{شکل ۹: منحنی‌های یادگیری}\label{sec:5-3-9}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{fig9_learning_curves.png}
+\caption[منحنی‌های یادگیری]{منحنی‌های یادگیری: روند \lr{Val AUPRC} در طول اپاک‌های آموزش (میانگین $\pm$ انحراف معیار).}
+\label{fig:learning-curves}
+\end{figure}
+
+
+این نمودار چهارپنلی، روند \lr{Val AUPRC} را در طول اپاک‌های آموزش نشان می‌دهد.
+
+\textbf{مشاهدات کلیدی:}
+
+\begin{itemize}
+\item \textbf{پنل \lr{DDI}:} مدل‌های پیشنهادی به سرعت به سقف عملکردی ($\approx 0.98$) همگرا می‌شوند. \lr{GCN} در سطح پایین‌تر ($\approx 0.90$) باقی می‌ماند.
+\item \textbf{پنل \lr{DTI}:} همگرایی در اپاک‌های اولیه (۳ تا ۸) رخ می‌دهد. مدل \lr{3-hop} روند صعودی ملایم‌تری دارد.
+\item \textbf{پنل \lr{PPI}:} \lr{AMS} به سرعت همگرا می‌شود. \lr{SkipGATv2} روند صعودی پیوسته‌تری دارد.
+\item \textbf{پنل \lr{GDI}:} پدیده قابل‌توجهی در مدل \lr{SkipGNN} مشاهده می‌شود.
+\end{itemize}
+
+\textbf{پدیده افت عملکرد در \lr{SkipGNN} روی \lr{GDI}:}
+در پنل \lr{GDI}، مدل مرجع \lr{SkipGNN} از اپاک‌های اولیه با \lr{Val AUPRC} بالا ($\approx 0.93$) شروع شده و سپس روند نزولی تدریجی را طی می‌کند تا جایی که توقف زودهنگام آموزش را متوقف می‌سازد. این الگو با فرضیه بن‌بست هندسی در گراف‌های دوقطبی (بخش ۲-۴-۱) هم‌خوان است: عملگر پرش باینری $\text{\lr{sign}}(A^2)$ در گراف دوقطبی صرفاً اتصالات درون‌نوعی ایجاد می‌کند و با ادامه آموزش، این سیگنال‌های غیرمرتبط به‌تدریج بازنمایی گره‌ها را آلوده می‌سازند.
+
+\textbf{محدودیت تفسیر:} این مشاهده بر اساس ۳ سید است. برای اثبات قطعی این پدیده، تکرار با سیدهای بیشتر و تحلیل آماری رسمی ضروری است.
+
+\subsection{شکل ۱۰: شاخص \lr{F1} در آستانه بهینه}\label{sec:5-3-10}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.98\textwidth]{fig10_f1_at_tau.png}
+\caption[شاخص \lr{F1} در آستانۀ بهینه]{شاخص \lr{F1} در آستانۀ منجمد اعتبارسنجی ($\tau^{\ast}$). هوریستیک به‌دلیل نداشتن آستانۀ احتمالی حذف شده است.}
+\label{fig:f1-tau}
+\end{figure}
+
+
+این نمودار شاخص \lr{F1} را در آستانه منجمد اعتبارسنجی ($\tau^*$) گزارش می‌کند. هوریستیک به دلیل فاقد بودن آستانه احتمالی حذف شده است.
+
+\textbf{مشاهدات:}
+\begin{itemize}
+\item در \lr{DDI}، شاخص \lr{F1} برای \lr{AMS}، \lr{Contrastive} و \lr{3-hop} به بالای $0.93$ می‌رسد.
+\item در \lr{GDI}، مدل‌های \lr{3-hop} و \lr{Contrastive} با \lr{F1} حدود $0.889$ بالاترین تعادل را نشان می‌دهند.
+\item در \lr{PPI}، \lr{SkipGATv2} با \lr{F1} حدود $0.809$ بالاترین تعادل را دارد.
+\end{itemize}
+
+\section{تحلیل فضاهای نهفته با \lr{t-SNE}}\label{sec:5-4}
+
+
+\begin{figure}[htbp]
+\centering
+\begin{minipage}{0.48\textwidth}\centering
+\includegraphics[width=\linewidth]{fig_tsne_DTI_gcn_seed42.png}\\[2pt]
+{\small \lr{GCN}}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}\centering
+\includegraphics[width=\linewidth]{fig_tsne_DTI_skipgnn_seed42.png}\\[2pt]
+{\small \lr{SkipGNN}}
+\end{minipage}\\[8pt]
+\begin{minipage}{0.48\textwidth}\centering
+\includegraphics[width=\linewidth]{fig_tsne_DTI_ams_seed42.png}\\[2pt]
+{\small \lr{AMS-SkipGNN}}
+\end{minipage}\hfill
+\begin{minipage}{0.48\textwidth}\centering
+\includegraphics[width=\linewidth]{fig_tsne_DTI_gat_seed42.png}\\[2pt]
+{\small \lr{SkipGATv2}}
+\end{minipage}
+\caption[تصویرسازی \lr{t-SNE} لایۀ آخر]{تصویرسازی \lr{t-SNE} از امبدینگ لایۀ آخر روی دیتاست \lr{DTI} (سید ۴۲). رنگ‌ها نوع موجودیت را در گراف دوقطبی نشان می‌دهند.}
+\label{fig:tsne-dti}
+\end{figure}
+
+
+برای درک شهودی از چگونگی سازمان‌دهی فضا توسط انکودرها، امبدینگ‌های لایه آخر مدل‌ها در سید ۴۲ توسط الگوریتم \lr{t-SNE} \cite{maaten2008tsne} تصویرسازی شدند. پارامترهای تصویرسازی:
+\begin{itemize}
+\item کاهش بعد از ۶۴ به ۲
+\item نمونه‌برداری حداکثر ۴۰۰۰ گره
+\item رنگ‌آمیزی بر اساس نوع موجودیت (مبدا/مقصد) در گراف‌های دوقطبی
+\item \pcode{perplexity = min(30, max(5, N/10))}
+\item \pcode{init = "pca"}
+\end{itemize}
+
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{تحلیل تطبیقی ویژگی‌های بصری مانیفولد فضای نهفته}
+\label{tab:5-6}
+\begin{tabular}{llll}
+\toprule
+مدل & ساختار هندسی مشاهده‌شده & تفکیک نوع موجودیت & تفسیر \\
+\midrule
+\lr{GCN} & رشته‌ای و درهم‌تنیده & تفکیک ضعیف & محو هویت ساختاری گره‌ها \\
+\lr{SkipGNN} & دو قطب مجزا با مرز خشک & تفکیک ماکروسکوپیک & تراکم ناشی از باینری‌سازی \\
+\lr{AMS} & مدولار با هسته و حاشیه & تفکیک پیوسته & وزن‌دهی پیوسته و حفظ تنوع \\
+\lr{3-hop} & پل‌های ارتباطی میان خوشه‌ها & تفکیک با اتصالات مرزی & اتصال خانواده‌های ساختاری \\
+\lr{Contrastive} & توزیع یکنواخت & توزیع متعادل & اثر زیان مقابله‌ای \\
+\lr{SkipGATv2} & جزایر خوشه‌ای مجزا & خوشه‌بندی تمیز & هرس یال‌های کم‌اهمیت \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\textbf{ملاحظات روش‌شناختی:} تحلیل \lr{t-SNE} توصیفی و کیفی است. برای ارزیابی کمّی کیفیت فضای نهفته، معیارهایی مانند \lr{Silhouette Score}، \lr{Alignment} و \lr{Uniformity} \cite{wang2020uniformity}، یا دقت طبقه‌بندی \lr{k-NN} روی فضای نهفته می‌توانند مکمل مفیدی باشند. این معیارها به‌عنوان کار آینده پیشنهاد می‌شوند.
+
+\section{خلاصه یافته‌های کلیدی فصل}\label{sec:5-5}
+
+
+جدول ۵-۷ خلاصه‌ای از بهبودهای کلیدی مدل‌های پیشنهادی نسبت به مدل مرجع \lr{SkipGNN} را در معیار اصلی رتبه‌بندی (\lr{Hard AUPRC}) نشان می‌دهد. مقادیر بهبود به واحد درصد (\lr{percentage points}) بیان شده‌اند:
+
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{بهبود مطلق نسبت به \lr{SkipGNN} در \lr{Hard AUPRC}}
+\label{tab:5-7}
+\begin{tabular}{lllll}
+\toprule
+دیتاست & \lr{SkipGNN} & بهترین مدل پیشنهادی & بهبود مطلق (واحد درصد) & وضعیت آماری \\
+\midrule
+\lr{DDI} & $0.724$ & \lr{AMS}: $0.912$ & $+0.188$ & برتری بدون هم‌پوشانی بازه‌ها \\
+\lr{PPI} & $0.622$ & \lr{SkipGATv2}: $0.778$ & $+0.156$ & برتری بدون هم‌پوشانی بازه‌ها \\
+\lr{GDI} & $0.720$ & \lr{SkipGATv2}: $0.837$ & $+0.117$ & برتری مرزی \\
+\lr{DTI} & $0.695$ & \lr{AMS}، \lr{SkipGATv2} و \lr{3-hop} هم‌سطح & $+0.10$ تا $+0.11$ & هم‌سطح آماری (بازه‌های هم‌پوشان) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\textbf{یافته‌های مکمل:}
+\begin{itemize}
+\item در دیتاست \lr{PPI}، \lr{SkipGATv2} با اختلاف $+0.104$ واحد درصد از \lr{AMS} پیشی گرفته است. این برتری با وجود گام‌های بهینه‌سازی کمتر (۳۱ در برابر ۲۵۵ گام در هر اپاک) رخ داده است.
+\item در دیتاست \lr{GDI}، هوریستیک تحلیلی با $0.842$ بالاتر از تمام مدل‌های عصبی است.
+\item در دیتاست \lr{DDI}، \lr{AMS} با $0.912$ برترین عملکرد را در میان مدل‌های عصبی دارد.
+\end{itemize}

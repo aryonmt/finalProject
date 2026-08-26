@@ -1,0 +1,489 @@
+% Auto-generated from report/4.md — do not edit by hand.
+\section{چارچوب مفهومی یکپارچه}\label{sec:4-1}
+
+
+تمامی مدل‌های این پژوهش بر پایه یک چارچوب محاسباتی انتها-به-انتها طراحی شده‌اند که شامل سه رکن اصلی است:
+
+\textbf{رکن اول  -  انکودر ساختاری:} دریافت ویژگی‌های گره $X$ و ماتریس‌های فیلتر توپولوژیک تنک ($F$, $F_s$, $F_3$) و استخراج ماتریس امبدینگ نهفته $E \in \mathbb{R}^{N \times d_2}$.
+
+\textbf{رکن دوم  -  استخراج روابط جفتی:} نگاشت غیرخطی امبدینگ گره‌های مبدا و مقصد به فضای تعاملی.
+
+\textbf{رکن سوم  -  دیکودر و طبقه‌بندی پیوند:} برآورد لاجیت خام $\text{\lr{Logit}}(u, v) \in \mathbb{R}$ جهت ارزیابی در تابع زیان کراس‌انتروپی باینری.
+
+چهار مدل پیشنهادی این پژوهش هر یک بر بُعد مشخصی از محدودیت‌های شناسایی‌شده در فصل دوم تمرکز دارند:
+
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{خلاصه چهار مدل پیشنهادی و محدودیت هدف‌گذاری‌شده}
+\label{tab:4-1}
+\begin{tabular}{lllll}
+\toprule
+مدل & کلید در کد & نوع پرش & محدودیت هدف & مکانیزم کلیدی \\
+\midrule
+\lr{AMS-SkipGNN} & \pcode{ams} & پیوسته (وزن‌دار) & پرش باینری + دیکودر خطی + ادغام ثابت & گیتینگ سیگموئیدی + دیکودر ۴گانه \\
+\lr{SkipGATv2} & \pcode{gat} & پیوسته (وزن‌دار) & انتشار ثابت لاپلاسی & توجه پویا لبه‌ای + ادغام گیتینگ \\
+\lr{ThreeHopSkipGNN} & \pcode{3hop} & پیوسته + ۳-گام & بن‌بست دوقطبی & سه کانال موازی + گیت سافت‌مکس \\
+\lr{ContrastiveSkipGNN} & \pcode{contrastive} & پیوسته (وزن‌دار) & پایداری فضای بازنمایی & دو برج مستقل + \lr{InfoNCE} متقارن \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\section{مدل پیشنهادی ۱: \lr{AMS-SkipGNN}}\label{sec:4-2}
+
+
+مدل \lr{AMS-SkipGNN} (\lr{Attentive Multi-Scale SkipGNN}) سه محدودیت اول شناسایی‌شده در فصل دوم را به‌طور همزمان هدف قرار می‌دهد. این مدل در کلاس \pcode{AMSSkipGNN} (فایل \pcode{src/models/ams\_skipgnn.py}) پیاده‌سازی شده و \pcode{skip\_kind = "weighted"} اعلام می‌کند.
+
+\subsection{معادلات انتشار پیام در لایه اول انکودر}\label{sec:4-2-1}
+
+
+در لایه اول، پیام‌ها به‌صورت موازی در دو نمای مستقیم و پرش وزن‌دار منتشر می‌شوند:
+
+\textbf{کانال مستقیم اصلی:}
+
+
+\begin{equation}
+\label{eq:4.1}
+H_{\text{\lr{orig}}}^{(1)} = F X W_o^{(0)} \in \mathbb{R}^{N \times d_1}
+\end{equation}
+
+
+\textbf{کانال متقاطع پرش-به-اصلی:}
+
+
+\begin{equation}
+\label{eq:4.2}
+H_{\text{\lr{skip-cross}}}^{(1)} = F_s X W_{so}^{(0)} \in \mathbb{R}^{N \times d_1}
+\end{equation}
+
+
+که در آن $W_o^{(0)}, W_{so}^{(0)} \in \mathbb{R}^{d_{\text{\lr{in}}} \times d_1}$ ماتریس‌های تبدیل خطی هستند و $d_1 = 64$.
+
+\subsection{واحد گیتینگ تطبیقی باقی‌مانده}\label{sec:4-2-2}
+
+
+به‌جای جمع بدون وزن ($H_{\text{\lr{orig}}} + H_{\text{\lr{skip-cross}}}$) که در \lr{SkipGNN} استفاده می‌شد، مدل یک بردار گیت وابسته به داده برای تک‌تک گره‌ها یاد می‌گیرد. در کد، این عمل در تابع \pcode{\_fuse} پیاده‌سازی شده است:
+
+
+\begin{equation}
+\label{eq:4.3}
+g_1 = \sigma\left( [H_{\text{\lr{orig}}}^{(1)} \parallel H_{\text{\lr{skip-cross}}}^{(1)}] w_{g1} + b_{g1} \right) \in \mathbb{R}^{N \times 1}
+\end{equation}
+
+
+که در آن $w_{g1} \in \mathbb{R}^{2d_1}$ بردار وزن گیت و $\sigma(\cdot)$ تابع سیگموئید است. خروجی نمای مستقیم با ترکیب محدب زیر محاسبه می‌شود:
+
+
+\begin{equation}
+\label{eq:4.4}
+O^{(1)} = \text{\lr{ReLU}}\left( g_1 \odot H_{\text{\lr{orig}}}^{(1)} + (1 - g_1) \odot H_{\text{\lr{skip-cross}}}^{(1)} \right)
+\end{equation}
+
+
+سپس نمای پرش لایه اول با دریافت پیام متقاطع از $O^{(1)}$ به‌روزرسانی می‌گردد:
+
+
+\begin{equation}
+\label{eq:4.5}
+S^{(1)} = \text{\lr{ReLU}}\left( F_s X W_s^{(0)} + F O^{(1)} W_{os}^{(0)} \right)
+\end{equation}
+
+
+\subsection{معادلات انتشار پیام در لایه دوم انکودر}\label{sec:4-2-3}
+
+
+امبدینگ‌های میانی لایه اول پس از اعمال خاموشی تصادفی ($\text{\lr{Dropout}}$ با احتمال $p = 0.5$) وارد لایه دوم می‌شوند:
+
+
+\begin{equation}
+\label{eq:4.6}
+H_{\text{\lr{orig}}}^{(2)} = F \hat{O}^{(1)} W_o^{(1)} \in \mathbb{R}^{N \times d_2}
+\end{equation}
+
+
+
+\begin{equation}
+\label{eq:4.7}
+H_{\text{\lr{skip}}}^{(2)} = F_s \hat{S}^{(1)} W_{s2o}^{(1)} \in \mathbb{R}^{N \times d_2}
+\end{equation}
+
+
+ترکیب نهایی امبدینگ‌های لایه دوم توسط گیت تطبیقی دوم صورت می‌پذیرد:
+
+
+\begin{equation}
+\label{eq:4.8}
+g_2 = \sigma\left( [H_{\text{\lr{orig}}}^{(2)} \parallel H_{\text{\lr{skip}}}^{(2)}] w_{g2} + b_{g2} \right)
+\end{equation}
+
+
+
+\begin{equation}
+\label{eq:4.9}
+E = g_2 \odot H_{\text{\lr{orig}}}^{(2)} + (1 - g_2) \odot H_{\text{\lr{skip}}}^{(2)} \in \mathbb{R}^{N \times d_2}
+\end{equation}
+
+
+\subsection{دیکودر تانسوری تعاملی ۴گانه}\label{sec:4-2-4}
+
+
+برای هر جفت کاندید $(u, v)$، بردارهای امبدینگ $E_u, E_v \in \mathbb{R}^{d_2}$ استخراج شده و تانسور تعاملی زیر با ابعاد $4d_2$ تشکیل می‌شود:
+
+
+\begin{equation}
+\label{eq:4.10}
+Z_{uv} = \left[ E_u \parallel E_v \parallel (E_u \odot E_v) \parallel |E_u - E_v| \right] \in \mathbb{R}^{4d_2}
+\end{equation}
+
+
+لاجیت نهایی از طریق یک لایه غیرخطی با نرمال‌سازی دسته‌ای به دست می‌آید:
+
+
+\begin{equation}
+\label{eq:4.11}
+H_{\text{\lr{dec}}} = \text{\lr{Dropout}}\left( \text{\lr{ReLU}}\left( \text{\lr{BatchNorm1d}}(Z_{uv} W_{d1} + b_{d1}) \right), p \right)
+\end{equation}
+
+
+
+\begin{equation}
+\label{eq:4.12}
+\text{\lr{Logit}}(u, v) = H_{\text{\lr{dec}}} W_{d2} + b_{d2} \in \mathbb{R}
+\end{equation}
+
+
+که در آن $W_{d1} \in \mathbb{R}^{4d_2 \times d_{\text{\lr{dec}}}}$ ($d_{\text{\lr{dec}}} = 64$) و $W_{d2} \in \mathbb{R}^{d_{\text{\lr{dec}}} \times 1}$ است. استفاده از \pcode{BatchNorm1d} مقیاس چهار مولفه ناهمگن تانسور تعاملی را پیش از ورود به پرسپترون متعادل می‌سازد.
+
+\section{مدل پیشنهادی ۲: \lr{SkipGATv2}}\label{sec:4-3}
+
+
+مدل \lr{SkipGATv2} محدودیت انتشار ثابت لاپلاسی را هدف قرار می‌دهد. با جایگزینی کانوولوشن ثابت با مکانیزم توجه پویا لبه‌ای، شبکه قادر است یال‌های کم‌اطلاع را به‌صورت خودکار کم‌اهمیت کند \cite{brody2022gatv2}. این مدل در کلاس \pcode{SkipGATv2} (فایل \pcode{src/models/skip\_gat.py}) پیاده‌سازی شده است.
+
+\subsection{لایه توجه تنک \pcode{SparseGATv2Layer}}\label{sec:4-3-1}
+
+
+برای یک لایه با $K$ سر توجه ($K = 4$ و بعد هر سر $d_k = 16$، به‌طوری‌که $d_{\text{\lr{out}}} = K \cdot d_k = 64$):
+
+\textbf{نگاشت خطی ویژگی‌های مبدا و مقصد:}
+
+
+\begin{equation}
+\label{eq:4.13}
+h^{\text{\lr{src}}} = X W_{\text{\lr{src}}}, \quad h^{\text{\lr{dst}}} = X W_{\text{\lr{dst}}} \in \mathbb{R}^{N \times (K \cdot d_k)}
+\end{equation}
+
+
+\textbf{امتیازدهی پویا به ازای یال‌های موجود $(i, j) \in \mathcal{E}$ در سر $k$:}
+
+
+\begin{equation}
+\label{eq:4.14}
+e_{ij}^k = \left(\mathbf{a}_k\right)^T \text{\lr{LeakyReLU}}\left( h_{i,k}^{\text{\lr{src}}} + h_{j,k}^{\text{\lr{dst}}}, \alpha = 0.2 \right)
+\end{equation}
+
+
+که در آن $\mathbf{a}_k \in \mathbb{R}^{d_k}$ بردار توجه یادگیرنده است. توجه داشته باشید که برخلاف \lr{GAT} نسخه اول، در \lr{GATv2} غیرخطی‌سازی \textbf{پیش از} ضرب با بردار توجه اعمال می‌شود. این ترتیب، مشکل توجه ایستا را برطرف می‌سازد \cite{brody2022gatv2}.
+
+\textbf{سافت‌مکس تنک پایدار عددی:}
+
+
+\begin{equation}
+\label{eq:4.15}
+\text{\lr{score}}_{ij}^k = e_{ij}^k - \max_{m \in \mathcal{N}(i)} e_{im}^k
+\end{equation}
+
+
+
+\begin{equation}
+\label{eq:4.16}
+\alpha_{ij}^k = \frac{\exp(\text{\lr{score}}_{ij}^k)}{\sum_{m \in \mathcal{N}(i)} \exp(\text{\lr{score}}_{im}^k) + 10^{-12}}
+\end{equation}
+
+
+\textbf{تجمیع پیام‌ها:}
+
+
+\begin{equation}
+\label{eq:4.17}
+h_i^{(l+1)} = \left\|_{k=1}^{K} \left( \sum_{j \in \mathcal{N}(i)} \alpha_{ij}^k \cdot h_{j,k}^{\text{\lr{dst}}} \right) + \text{\lr{bias}} \right.
+\end{equation}
+
+
+\subsection{معماری انکودر متقابل دوکاناله}\label{sec:4-3-2}
+
+
+در این مدل، تمام عملگرهای انتشار با لایه‌های \pcode{SparseGATv2Layer} جایگزین شده‌اند و تابع فعال‌ساز $\text{\lr{ELU}}$ به‌جای $\text{\lr{ReLU}}$ استفاده می‌شود:
+
+\textbf{لایه اول:}
+
+
+\begin{equation}
+\label{eq:4.18}
+H_{\text{\lr{orig}}}^{(1)} = \text{\lr{GATv2}}_o(X, F), \quad H_{\text{\lr{skip-cross}}}^{(1)} = \text{\lr{GATv2}}_{so}(X, F_s)
+\end{equation}
+
+
+
+\begin{equation}
+\label{eq:4.19}
+O^{(1)} = \text{\lr{ELU}}\left( g_1 \odot H_{\text{\lr{orig}}}^{(1)} + (1 - g_1) \odot H_{\text{\lr{skip-cross}}}^{(1)} \right)
+\end{equation}
+
+
+
+\begin{equation}
+\label{eq:4.20}
+S^{(1)} = \text{\lr{ELU}}\left( \text{\lr{GATv2}}_s(X, F_s) + \text{\lr{GATv2}}_{os}(O^{(1)}, F) \right)
+\end{equation}
+
+
+\textbf{لایه دوم:}
+
+
+\begin{equation}
+\label{eq:4.21}
+E = g_2 \odot \text{\lr{GATv2}}_{o2}(O^{(1)}, F) + (1 - g_2) \odot \text{\lr{GATv2}}_{s2o}(S^{(1)}, F_s)
+\end{equation}
+
+
+\subsection{الگوریتم توجه تکه‌ای برای گراف‌های کلان}\label{sec:4-3-3}
+
+
+در گراف‌های بسیار بزرگ (مانند \lr{GDI} با ۱۹,۷۸۳ نود)، ساخت همزمان تانسورهای میانی $(|\mathcal{E}|, K, d_k)$ ممکن است از حافظه \lr{GPU} فراتر رود. راهکار پیاده‌سازی‌شده، عملگر مشتق‌پذیر سفارشی \pcode{\_ChunkedSparseGATv2} ذیل \pcode{torch.autograd.Function} است.
+
+\textbf{شرط انتخاب مسیر:}
+
+
+\begin{equation}
+\label{eq:4.22}
+\text{\lr{path}} = \begin{cases} \text{\lr{vectorized}} & \text{\lr{if }} |\mathcal{E}| \cdot K \cdot d_k \cdot s \le 384 \text{ \lr{MB}} \\ \text{\lr{chunked}} & \text{\lr{otherwise}} \end{cases}
+\end{equation}
+
+
+که در آن $s$ اندازه هر عنصر (۴ بایت برای \pcode{float32}) است. در مسیر تکه‌ای، یال‌ها در تکه‌های $1{,}048{,}576$ تایی پردازش می‌شوند و قله مصرف حافظه از $O(|\mathcal{E}|)$ به $O(\text{\lr{chunk}})$ کاهش می‌یابد. صحت این پیاده‌سازی در آزمون واحد \pcode{test\_chunked\_gat\_matches\_large\_chunk} اعتبارسنجی شده است.
+
+\section{مدل پیشنهادی ۳: \lr{ThreeHopSkipGNN}}\label{sec:4-4}
+
+
+مدل \lr{ThreeHopSkipGNN} به‌طور اختصاصی بن‌بست هندسی گراف‌های دوقطبی (محدودیت اول در فصل دوم) را هدف قرار می‌دهد. این مدل در کلاس \pcode{ThreeHopSkipGNN} (فایل \pcode{src/models/three\_hop\_skipgnn.py}) پیاده‌سازی شده و \pcode{skip\_kind = "three\_hop\_bundle"} اعلام می‌کند.
+
+\subsection{انکودر سه‌شاخه چندمقیاسی}\label{sec:4-4-1}
+
+
+این مدل در هر لایه دارای سه عملگر کانوولوشن گراف موازی است که به‌طور همزمان روی فیلترهای لاپلاسی $F_1$ (گراف اصلی)، $F_2$ (پرش ۲-گام) و $F_3$ (مسیر بازگشت ۳-گام) عمل می‌کنند:
+
+\textbf{انتشار لایه اول:}
+
+
+\begin{equation}
+\label{eq:4.23}
+H_1^{(1)} = \text{\lr{ReLU}}\left( F_1 X W_1^{(0)} \right) \in \mathbb{R}^{N \times d_1}
+\end{equation}
+
+
+
+\begin{equation}
+\label{eq:4.24}
+H_2^{(1)} = \text{\lr{ReLU}}\left( F_2 X W_2^{(0)} \right) \in \mathbb{R}^{N \times d_1}
+\end{equation}
+
+
+
+\begin{equation}
+\label{eq:4.25}
+H_3^{(1)} = \text{\lr{ReLU}}\left( F_3 X W_3^{(0)} \right) \in \mathbb{R}^{N \times d_1}
+\end{equation}
+
+
+\subsection{گیتینگ برداری سه‌کاناله با سافت‌مکس}\label{sec:4-4-2}
+
+
+برای ترکیب امبدینگ‌های سه‌گانه، یک مکانیزم توجه مسیر یادگیرنده طراحی شده است. برای هر شاخه $m \in \{1, 2, 3\}$، یک بردار توجه $\mathbf{v}_m \in \mathbb{R}^{d_1}$ تعریف می‌شود:
+
+\textbf{محاسبه امتیاز هر مسیر:}
+
+
+\begin{equation}
+\label{eq:4.26}
+s_m(i) = H_{m,i}^{(1)} \cdot \mathbf{v}_m^{(1)} \in \mathbb{R}
+\end{equation}
+
+
+\textbf{نرمال‌سازی وزن‌ها با سافت‌مکس:}
+
+
+\begin{equation}
+\label{eq:4.27}
+\gamma_m(i) = \frac{\exp(s_m(i))}{\sum_{k=1}^{3} \exp(s_k(i))}, \quad \sum_{m=1}^{3} \gamma_m(i) = 1
+\end{equation}
+
+
+\textbf{تجمیع محدب:}
+
+
+\begin{equation}
+\label{eq:4.28}
+H_{\text{\lr{fused}},i}^{(1)} = \gamma_1(i) H_{1,i}^{(1)} + \gamma_2(i) H_{2,i}^{(1)} + \gamma_3(i) H_{3,i}^{(1)}
+\end{equation}
+
+
+\textbf{انتشار لایه دوم:}
+
+
+\begin{equation}
+\label{eq:4.29}
+E_i = \sum_{m=1}^{3} \gamma_m^{(2)}(i) \cdot F_m H_{\text{\lr{fused}}}^{(1)} W_m^{(1)}
+\end{equation}
+
+
+امبدینگ نهایی $E$ وارد دیکودر تانسوری تعاملی ۴گانه (معادلات ۴-۱۰ تا ۴-۱۲) می‌شود.
+
+\section{مدل پیشنهادی ۴: \lr{ContrastiveSkipGNN}}\label{sec:4-5}
+
+
+مدل \lr{ContrastiveSkipGNN} محدودیت پایداری فضای بازنمایی را هدف قرار می‌دهد. این مدل در کلاس \pcode{ContrastiveSkipGNN} (فایل \pcode{src/models/contrastive\_skipgnn.py}) پیاده‌سازی شده و \pcode{skip\_kind = "weighted"} اعلام می‌کند.
+
+\subsection{انکودر دو نمایی مستقل}\label{sec:4-5-1}
+
+
+شبکه به‌طور همزمان دو نمای ساختاری از گراف را پردازش می‌کند:
+
+\textbf{نمای مستقیم:}
+
+
+\begin{equation}
+\label{eq:4.30}
+H^{(1)} = \text{\lr{Dropout}}(\text{\lr{ReLU}}(\text{\lr{GCN}}_{o1}(X, F)), p), \quad H^{(2)} = \text{\lr{GCN}}_{o2}(H^{(1)}, F)
+\end{equation}
+
+
+\textbf{نمای پرش:}
+
+
+\begin{equation}
+\label{eq:4.31}
+S^{(1)} = \text{\lr{Dropout}}(\text{\lr{ReLU}}(\text{\lr{GCN}}_{s1}(X, F_s)), p), \quad S^{(2)} = \text{\lr{GCN}}_{s2}(S^{(1)}, F_s)
+\end{equation}
+
+
+\textbf{ادغام دو نما:}
+
+
+\begin{equation}
+\label{eq:4.32}
+g = \sigma\left( [H^{(2)} \parallel S^{(2)}] w_{\text{\lr{fuse}}} + b_{\text{\lr{fuse}}} \right)
+\end{equation}
+
+
+
+\begin{equation}
+\label{eq:4.33}
+E = g \odot H^{(2)} + (1 - g) \odot S^{(2)}
+\end{equation}
+
+
+\subsection{سرهای تصویر غیرخطی}\label{sec:4-5-2}
+
+
+امبدینگ‌های لایه دوم دو نما وارد دو پرسپترون دولایه مجزا شده و روی کره واحد نرمال‌سازی می‌شوند:
+
+
+\begin{equation}
+\label{eq:4.34}
+z_i = \frac{\text{\lr{MLP}}_o(H_i^{(2)})}{\|\text{\lr{MLP}}_o(H_i^{(2)})\|_2}, \quad \tilde{z}_i = \frac{\text{\lr{MLP}}_s(S_i^{(2)})}{\|\text{\lr{MLP}}_s(S_i^{(2)})\|_2} \in \mathbb{R}^{d_{\text{\lr{proj}}}}
+\end{equation}
+
+
+که در آن $d_{\text{\lr{proj}}} = 32$ و $\text{\lr{MLP}}(h) = W_2 \cdot \text{\lr{ReLU}}(W_1 h + b_1) + b_2$.
+
+\subsection{تابع زیان تقارنی \lr{InfoNCE}}\label{sec:4-5-3}
+
+
+در هر بچ آموزشی، برای مجموعه گره‌های فعال، زوج $(z_i, \tilde{z}_i)$ به‌عنوان نمونه مثبت و جفت‌های $(z_i, \tilde{z}_j)$ به‌ازای $j \ne i$ به‌عنوان نمونه منفی تعریف می‌شوند:
+
+
+\begin{equation}
+\label{eq:4.35}
+\mathcal{L}_{o \to s} = -\frac{1}{|\mathcal{B}|} \sum_{i \in \mathcal{B}} \log \frac{\exp(z_i^T \tilde{z}_i / \tau)}{\sum_{j \in \mathcal{B}} \exp(z_i^T \tilde{z}_j / \tau)}
+\end{equation}
+
+
+
+\begin{equation}
+\label{eq:4.36}
+\mathcal{L}_{s \to o} = -\frac{1}{|\mathcal{B}|} \sum_{i \in \mathcal{B}} \log \frac{\exp(\tilde{z}_i^T z_i / \tau)}{\sum_{j \in \mathcal{B}} \exp(\tilde{z}_i^T z_j / \tau)}
+\end{equation}
+
+
+
+\begin{equation}
+\label{eq:4.37}
+\mathcal{L}_{\text{\lr{CL}}} = \frac{1}{2}(\mathcal{L}_{o \to s} + \mathcal{L}_{s \to o})
+\end{equation}
+
+
+\textbf{تابع زیان نهایی:}
+
+
+\begin{equation}
+\label{eq:4.38}
+\mathcal{L}_{\text{\lr{total}}} = \mathcal{L}_{\text{\lr{BCE}}} + \lambda \cdot \mathcal{L}_{\text{\lr{CL}}}
+\end{equation}
+
+
+که در آن پارامترهای تنظیمی $\tau = 0.2$ و $\lambda = 0.1$ هستند. در پیاده‌سازی، زیان مقابله‌ای تنها در حالت آموزش (\pcode{model.training == True}) محاسبه و به تابع زیان اصلی افزوده می‌شود. در حالت ارزیابی، خروجی مدل صرفاً دو مقداره \pcode{(logits, embeddings)} است.
+
+\section{مدل‌های خط مبنا}\label{sec:4-6}
+
+
+برای سنجش میزان بهبود ناشی از هر یک از نوآوری‌ها، سه خط مبنا در پایپ‌لاین بازپیاده‌سازی شدند:
+
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{مشخصات فنی خطوط مبنای پیاده‌سازی‌شده}
+\label{tab:4-2}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llllll}
+\toprule
+مدل & کلاس در کد & ماتریس‌های پیام‌رسانی & ادغام & دیکودر & \pcode{skip\_kind} \\
+\midrule
+\lr{GCN} & \pcode{StandardGCN} & فقط $F$ &  -  & الحاق خطی $[E_u \parallel E_v]$ & \pcode{"none"} \\
+\lr{SkipGNN} & \pcode{SkipGNNBaseline} & $F$ و $F_s^{\text{\lr{bin}}}$ & جمع ساده & الحاق خطی $[E_u \parallel E_v]$ & \pcode{"binary"} \\
+\lr{Heuristic} (\lr{RA}) &  -  & $A_{\text{\lr{train}}}$ & غیرپارامتری & ضرب ماتریسی ۳-گام (دوقطبی) &  -  \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+
+\textbf{نکته درباره هوریستیک:} در گراف‌های همگن، امتیاز بر پایه همسایگان مشترک وزن‌دار محاسبه می‌شود. در گراف‌های دوقطبی، از آنجا که همسایگان مشترک ۱-گام تهی هستند، از ضرب ماتریسی ۳-گام استفاده می‌شود (تابع \pcode{\_bipartite\_three\_walk\_scores} در \pcode{src/models/heuristics.py}).
+
+\section{نردبان ابلیشن مدولار}\label{sec:4-7}
+
+
+به‌منظور تفکیک سهم مستقل هر یک از اجزای معماری در افزایش کارایی، یک نردبان ابلیشن ۴ مرحله‌ای طراحی شده است. این نردبان در تابع \pcode{make\_ablation} (فایل \pcode{src/models/ams\_skipgnn.py}) و اسکریپت \pcode{scripts/run\_ablation.py} پیاده‌سازی شده است:
+
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{ساختار گام‌های چهارگانه مطالعه ابلیشن}
+\label{tab:4-3}
+\begin{tabular}{lllll}
+\toprule
+گام & شناسه & نوع پرش & ادغام & دیکودر \\
+\midrule
+۰ & \pcode{0\_skipgnn} & باینری $\text{\lr{sign}}(AA^T)$ & جمع ساده & الحاق خطی \\
+۱ & \pcode{1\_weighted} & پیوسته تخصیص منابع & جمع ساده & الحاق خطی \\
+۲ & \pcode{2\_gated} & پیوسته تخصیص منابع & گیتینگ سیگموئیدی & الحاق خطی \\
+۳ & \pcode{3\_full} & پیوسته تخصیص منابع & گیتینگ سیگموئیدی & تانسوری ۴گانه + \lr{BatchNorm} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+این نردبان ابلیشن به‌طور شفاف مشخص می‌کند که آیا بهبود دقت ناشی از اصلاح فیلتر پرش بوده، یا گیتینگ تطبیقی، یا استخراج تعاملات غیرخطی در دیکودر تانسوری. نتایج عددی این ابلیشن در فصل پنجم گزارش می‌شود.

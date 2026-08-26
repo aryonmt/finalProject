@@ -1,0 +1,20 @@
+\clearpage
+\begin{latin}
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{\lr{Abstract}}
+\markboth{Abstract}{Abstract}
+
+\setstretch{1.15}
+\noindent
+\textbf{Title:} Redesigning Skip-Graph Neural Networks for Predicting Biomolecular Interactions
+
+\vspace{0.8em}
+Predicting biomolecular interactions---including drug--target, drug--drug, protein--protein, and gene--disease links---is a core problem in systems biology and computational drug discovery. SkipGNN (Huang et al., 2020) injects a 2-hop skip graph into a graph neural network and reports strong results on standard benchmarks. A theoretical and empirical audit in this work identifies four structural limits of that model: a geometric dead-end of the $A^2$ operator on bipartite graphs, loss of density information under binarization, a linear decoder bottleneck, and degree bias in a uniform evaluation protocol.
+
+Four models are implemented in one leak-free pipeline: AMS-SkipGNN (resource-allocation skip, adaptive gating, four-way tensor decoder), SkipGATv2 (sparse dynamic edge attention), ThreeHopSkipGNN (1/2/3-hop multi-scale paths), and ContrastiveSkipGNN (symmetric InfoNCE). Evaluation uses a dual-bank protocol (uniform negatives and degree-aware hard negatives) on DTI, DDI, PPI, and GDI with three random seeds.
+
+On the hard bank the proposed models improve over SkipGNN: on DDI, AMS reaches $0.912$ versus $0.724$; on PPI, SkipGATv2 reaches $0.778$ versus $0.622$; on DTI and GDI the gains are about $+0.10$ to $+0.12$ percentage points. On DTI, AMS, SkipGATv2, and 3-hop are statistically on par (overlapping standard-deviation intervals). On GDI, the analytical resource-allocation heuristic attains $0.842$ and outperforms every neural model---an important limit of identity-feature GNNs on large sparse graphs.
+
+\vspace{0.8em}
+\noindent\textbf{Keywords:} link prediction, graph neural networks, SkipGNN, bipartite graphs, resource allocation, dual-bank evaluation
+\end{latin}

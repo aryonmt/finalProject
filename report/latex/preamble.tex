@@ -1,0 +1,234 @@
+% Shared preamble for the Persian B.Sc. report.
+% Compile with XeLaTeX + biber. See compile.ps1.
+
+\documentclass[a4paper,14pt,oneside,openany]{extbook}
+
+\usepackage{iftex}
+\RequireXeTeX
+
+\usepackage[
+  a4paper,
+  top=2.7cm,
+  bottom=2.7cm,
+  right=3.0cm,
+  left=2.5cm,
+  headheight=22pt
+]{geometry}
+
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{adjustbox}
+\renewcommand{\tabularxcolumn}[1]{>{\hspace{0pt}}p{#1}}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{setspace}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\makeatletter
+\providecommand{\ttl@finishall}{}
+\makeatother
+\usepackage{csquotes}
+\usepackage{xurl}
+\usepackage{newunicodechar}
+\usepackage{hyperref}
+\usepackage[
+  backend=biber,
+  style=numeric,
+  sorting=nyt,
+  maxbibnames=8,
+  minbibnames=6,
+  giveninits=true,
+  uniquename=init,
+  isbn=false,
+  doi=true,
+  url=true
+]{biblatex}
+
+\addbibresource{references.bib}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=black,
+  pdfdisplaydoctitle=true,
+  pdflang={fa}
+}
+\pdfstringdefDisableCommands{\def\lr#1{#1}\def\allowbreak{}\def\HeadNum#1{#1}\def\faarrow{\ensuremath{\to}}}
+
+\graphicspath{{../../figures/}{../}{./}}
+
+\captionsetup{font=small, labelfont=bf, skip=6pt}
+\captionsetup[table]{position=top}
+
+\onehalfspacing
+\setlength{\parskip}{0.35em}
+\setlength{\parindent}{0pt}
+\setlength{\emergencystretch}{2em}
+\setlist[itemize]{topsep=0.3em, itemsep=0.15em, leftmargin=1.6em, label={--}}
+\setlist[enumerate]{topsep=0.3em, itemsep=0.15em, leftmargin=1.8em}
+
+\numberwithin{equation}{chapter}
+
+\usepackage{xepersian}
+
+% TeX Live 2026 array.sty dropped this hook; bidi still calls it.
+\providecommand{\UseMathForPositioningText}{}
+
+\newcommand{\FontDir}{C:/Users/Aryou/AppData/Local/Microsoft/Windows/Fonts/}
+
+% B Nazanin has no U+2013; TeX ligatures on -- would become a missing glyph.
+\settextfont[
+  Path = \FontDir,
+  UprightFont = BNazanin.ttf,
+  BoldFont = Nazaninb.ttf,
+  ItalicFont = BNazanin.ttf,
+  BoldItalicFont = Nazaninb.ttf,
+  Ligatures = TeXOff,
+  Script = Arabic,
+  Language = Persian
+]{BNazanin}
+
+% Calibri ~12.5 pt at 14 pt body (about 1.5 pt smaller). Keep TeX ligatures for English.
+\setlatintextfont[
+  Ligatures = TeX,
+  Scale = 0.893
+]{Calibri}
+
+\setmonofont[
+  Scale = 0.82
+]{Consolas}
+
+\DefaultMathDigits
+
+\defpersianfont\titrfont[
+  Path = \FontDir,
+  Ligatures = TeXOff
+]{BTitrBd.ttf}
+
+\defpersianfont\nastaliqfont[
+  Path = \FontDir,
+  Scale = 1.05
+]{IranNastaliq.ttf}
+
+% Combining hamza-above is missing in B Nazanin; drop leftovers.
+\newunicodechar{ٔ}{}
+% Glyphs missing from B Nazanin (Arabic thousands/decimal/percent).
+\newunicodechar{٬}{,}
+\newunicodechar{٫}{.}
+\newunicodechar{٪}{\%}
+\newunicodechar{★}{$\star$}
+
+\DeclareRobustCommand{\pcode}[1]{\lr{\texttt{#1}}}
+\newcommand{\pname}[1]{\lr{#1}}
+% Prose arrows in RTL: \to points the wrong way because tokens are laid out
+% right-to-left. Math formulas keep \to (LTR math).
+\DeclareRobustCommand{\faarrow}{\ensuremath{\leftarrow}}
+
+% Heading numbers: Persian digits (۰-۹), LTR order so ۶-۲ is not ۲-۶.
+% \lr would otherwise switch to Calibri and keep Western 0-9.
+\SepMark{-}
+\makeatletter
+\newcommand{\@fadigit}[1]{%
+  \ifcase#1۰\or۱\or۲\or۳\or۴\or۵\or۶\or۷\or۸\or۹\else?\fi
+}
+\def\@fanum#1{%
+  \ifnum#1<10 \@fadigit{#1}%
+  \else
+    \expandafter\@fanum\expandafter{\the\numexpr(#1)/10\relax}%
+    \@fadigit{\the\numexpr(#1)-10*((#1)/10)\relax}%
+  \fi
+}
+\newcommand{\fanum}[1]{\expandafter\@fanum\csname c@#1\endcsname}
+% Numbers stay B Nazanin Bold inside \lr (otherwise Calibri, not bold).
+\DeclareRobustCommand{\HeadNum}[1]{{\persianfont\bfseries #1}}
+\newcommand{\FixRtlCounters}{%
+  \SepMark{-}%
+  \renewcommand{\thechapter}{\fanum{chapter}}%
+  \renewcommand{\thesection}{\lr{\HeadNum{\fanum{chapter}\@SepMark\fanum{section}}}}%
+  \renewcommand{\thesubsection}{\lr{\HeadNum{\fanum{chapter}\@SepMark\fanum{section}\@SepMark\fanum{subsection}}}}%
+  \renewcommand{\thesubsubsection}{\lr{\HeadNum{\fanum{chapter}\@SepMark\fanum{section}\@SepMark\fanum{subsection}\@SepMark\fanum{subsubsection}}}}%
+  \renewcommand{\thefigure}{\lr{\HeadNum{\fanum{chapter}\@SepMark\fanum{figure}}}}%
+  \renewcommand{\thetable}{\lr{\HeadNum{\fanum{chapter}\@SepMark\fanum{table}}}}%
+  \renewcommand{\theequation}{\lr{\fanum{chapter}\@SepMark\fanum{equation}}}%
+}
+\FixRtlCounters
+\AtBeginDocument{\FixRtlCounters}
+\renewcommand{\@pnumwidth}{2em}
+\renewcommand{\@tocrmarg}{3.5em}
+\makeatother
+
+% Body is 14 pt. B Titr is optically larger than Nazanin; keep headings tight.
+\titleformat{\section}
+  {\titrfont\normalsize}
+  {\thesection}
+  {0.5em}
+  {}
+\titleformat{\subsection}
+  {\bfseries\normalsize}
+  {\thesubsection}
+  {0.4em}
+  {}
+\titleformat{\subsubsection}
+  {\bfseries\normalsize}
+  {\thesubsubsection}
+  {0.35em}
+  {}
+
+\titlespacing*{\section}{0pt}{1.1em}{0.4em}
+\titlespacing*{\subsection}{0pt}{0.9em}{0.3em}
+\titlespacing*{\subsubsection}{0pt}{0.75em}{0.22em}
+
+\fancypagestyle{plain}{%
+  \fancyhf{}%
+  \renewcommand{\headrulewidth}{0pt}%
+  \fancyfoot[C]{\thepage}%
+}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyhead[R]{\small\leftmark}
+\fancyhead[L]{\small\thepage}
+\fancyfoot{}
+\renewcommand{\chaptermark}[1]{\markboth{فصل~\thechapter}{}}
+
+\makeatletter
+\renewcommand{\@makechapterhead}[1]{%
+  \vspace*{8pt}%
+  {\parindent \z@ \centering \normalfont
+    \interlinepenalty\@M
+    {\titrfont\normalsize فصل~\HeadNum{\thechapter}\par\nobreak\vspace{4pt}}
+    {\titrfont\large #1\par\nobreak}
+    \vskip 12pt
+  }}
+\renewcommand{\@makeschapterhead}[1]{%
+  \vspace*{8pt}%
+  {\parindent \z@ \centering \normalfont
+    \interlinepenalty\@M
+    {\if@RTL\titrfont\else\latinfont\bfseries\fi\large #1\par\nobreak}
+    \vskip 12pt
+  }}
+\makeatother
+
+\newcommand{\unilogo}{../Uni-logo.png}
+\newcommand{\studentname}{امیررضا نعمتی}
+\newcommand{\advisorname}{دکتر خدیجه آقاجانی}
+\newcommand{\studentid}{40113160281830}
+\newcommand{\university}{دانشگاه مازندران}
+\newcommand{\faculty}{دانشکده مهندسی و فناوری}
+\newcommand{\department}{گروه مهندسی کامپیوتر}
+\newcommand{\degreefa}{پروژه کارشناسی مهندسی کامپیوتر}
+\newcommand{\termfa}{نیم‌سال دوم سال تحصیلی ۱۴۰۴-۱۴۰۵}
+\newcommand{\titlefa}{بازطراحی شبکه‌های عصبی گراف پرشی برای پیش‌بینی تعاملات زیست‌مولکولی}
+\newcommand{\titleen}{Redesigning Skip-Graph Neural Networks for Predicting Biomolecular Interactions}

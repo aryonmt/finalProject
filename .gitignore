@@ -13,6 +13,7 @@ build/
 .ipynb_checkpoints/
 .DS_Store
 Thumbs.db
+.cursor/
 
 # data caches and embeddings (CSV splits are tracked)
 data/_upstream/
@@ -49,6 +50,21 @@ figures/*
 !figures/.gitkeep
 !figures/README.md
 !figures/*.png
+
+# LaTeX build artifacts (report sources are tracked)
+report/latex/*.aux
+report/latex/*.log
+report/latex/*.toc
+report/latex/*.lof
+report/latex/*.lot
+report/latex/*.out
+report/latex/*.bbl
+report/latex/*.blg
+report/latex/*.bcf
+report/latex/*.run.xml
+report/latex/*.synctex.gz
+report/latex/*.fls
+report/latex/*.fdb_latexmk
 
 # Kaggle / review archives
 *.zip
